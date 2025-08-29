@@ -110,11 +110,6 @@ class EquipmentListing extends Model
         return $this->hasMany(Inquiry::class, 'listing_id');
     }
 
-    public function favorites(): HasMany
-    {
-        return $this->hasMany(UserFavorite::class, 'listing_id');
-    }
-
     // Scopes
     public function scopeActive(Builder $query): Builder
     {
