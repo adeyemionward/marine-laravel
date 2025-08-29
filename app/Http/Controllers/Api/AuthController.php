@@ -134,8 +134,24 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         try {
-            // Revoke current token
-            $request->user()->currentAccessToken()->delete();
+            // Get the authenticated user
+            $user = $request->user();
+            
+            // Check if user is authenticated
+            if (!$user) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Already logged out',
+                ]);
+            }
+
+            // Get current token
+            $currentToken = $user->currentAccessToken();
+            
+            // Delete current token if it exists
+            if ($currentToken) {
+                $currentToken->delete();
+            }
 
             return response()->json([
                 'success' => true,
@@ -143,11 +159,15 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            // Log the error for debugging
+            \Log::error('Logout error: ' . $e->getMessage());
+            
+            // Still return success since the client should clear local data anyway
             return response()->json([
-                'success' => false,
-                'message' => 'Logout failed',
-                'error' => $e->getMessage(),
-            ], 500);
+                'success' => true,
+                'message' => 'Logged out successfully',
+                'debug' => app()->environment('local') ? $e->getMessage() : null,
+            ]);
         }
     }
 
