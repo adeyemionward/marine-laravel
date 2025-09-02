@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\EquipmentListing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,50 +15,80 @@ class EquipmentController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        // Sample equipment data for testing
-        $sampleEquipment = [
-            [
-                'id' => 1,
-                'title' => 'Yamaha F115 Outboard Engine',
-                'description' => 'Reliable 115HP 4-stroke outboard engine in excellent condition',
-                'price' => 12500,
-                'currency' => 'USD',
-                'location' => 'Lagos, Nigeria',
-                'category' => 'Engines',
-                'condition' => 'used',
-                'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=Yamaha+Engine'],
-                'created_at' => now()->subDays(2)->toDateTimeString(),
-                'is_featured' => true,
-                'seller' => ['name' => 'Marine Equipment Store', 'verified' => true]
-            ],
-            [
-                'id' => 2,
-                'title' => 'Boston Whaler 210 Montauk',
-                'description' => 'Classic fishing boat with twin engines, perfect for offshore fishing',
-                'price' => 45000,
-                'currency' => 'USD',
-                'location' => 'Port Harcourt, Nigeria',
-                'category' => 'Boats',
-                'condition' => 'used',
-                'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=Boston+Whaler'],
-                'created_at' => now()->subDays(5)->toDateTimeString(),
-                'is_featured' => false,
-                'seller' => ['name' => 'Coastal Marine', 'verified' => true]
-            ],
-        ];
+        try {
+            $query = EquipmentListing::with(['seller', 'category'])
+                ->active()
+                ->published()
+                ->notExpired();
 
-        return response()->json([
-            'success' => true,
-            'data' => $sampleEquipment,
-            'meta' => [
-                'current_page' => 1,
-                'per_page' => 10,
-                'total' => 2,
-                'last_page' => 1,
-                'has_more' => false,
-            ],
-            'message' => 'Equipment listings retrieved successfully'
-        ]);
+            // Filter by category
+            if ($request->filled('category_id')) {
+                $query->byCategory($request->category_id);
+            }
+
+            // Filter by location
+            if ($request->filled('state')) {
+                $query->inLocation($request->state, $request->city);
+            }
+
+            // Filter by condition
+            if ($request->filled('condition')) {
+                $query->where('condition', $request->condition);
+            }
+
+            // Filter by price range
+            if ($request->filled('min_price')) {
+                $query->where('price', '>=', $request->min_price);
+            }
+            if ($request->filled('max_price')) {
+                $query->where('price', '<=', $request->max_price);
+            }
+
+            // Search by title or description
+            if ($request->filled('q')) {
+                $query->where(function($q) use ($request) {
+                    $q->where('title', 'LIKE', '%' . $request->q . '%')
+                      ->orWhere('description', 'LIKE', '%' . $request->q . '%');
+                });
+            }
+
+            // Sort options
+            switch ($request->get('sort', 'created_at')) {
+                case 'price_asc':
+                    $query->orderBy('price', 'asc');
+                    break;
+                case 'price_desc':
+                    $query->orderBy('price', 'desc');
+                    break;
+                case 'featured':
+                    $query->orderBy('is_featured', 'desc')
+                          ->orderBy('created_at', 'desc');
+                    break;
+                default:
+                    $query->orderBy('created_at', 'desc');
+            }
+
+            $perPage = min(50, max(1, (int) $request->get('per_page', 12)));
+            $equipment = $query->paginate($perPage);
+
+            return response()->json([
+                'success' => true,
+                'data' => $equipment->items(),
+                'meta' => [
+                    'current_page' => $equipment->currentPage(),
+                    'per_page' => $equipment->perPage(),
+                    'total' => $equipment->total(),
+                    'last_page' => $equipment->lastPage(),
+                    'has_more' => $equipment->hasMorePages(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch equipment listings',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -65,33 +96,33 @@ class EquipmentController extends Controller
      */
     public function featured(Request $request): JsonResponse
     {
-        $limit = min(20, max(1, (int) $request->get('limit', 10)));
-        
-        $featuredEquipment = [
-            [
-                'id' => 1,
-                'title' => 'Yamaha F115 Outboard Engine',
-                'description' => 'Reliable 115HP 4-stroke outboard engine in excellent condition',
-                'price' => 12500,
-                'currency' => 'USD',
-                'location' => 'Lagos, Nigeria',
-                'category' => 'Engines',
-                'condition' => 'used',
-                'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=Yamaha+Engine'],
-                'created_at' => now()->subDays(2)->toDateTimeString(),
-                'is_featured' => true,
-                'seller' => ['name' => 'Marine Equipment Store', 'verified' => true]
-            ],
-        ];
+        try {
+            $limit = min(20, max(1, (int) $request->get('limit', 12)));
+            
+            $equipment = EquipmentListing::with(['seller', 'category'])
+                ->active()
+                ->published()
+                ->notExpired()
+                ->featured()
+                ->orderBy('created_at', 'desc')
+                ->limit($limit)
+                ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => array_slice($featuredEquipment, 0, $limit),
-            'meta' => [
-                'count' => count($featuredEquipment),
-                'limit' => $limit,
-            ],
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $equipment,
+                'meta' => [
+                    'count' => $equipment->count(),
+                    'limit' => $limit,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch featured equipment',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -99,33 +130,33 @@ class EquipmentController extends Controller
      */
     public function popular(Request $request): JsonResponse
     {
-        $limit = min(20, max(1, (int) $request->get('limit', 10)));
-        
-        $popularEquipment = [
-            [
-                'id' => 2,
-                'title' => 'Boston Whaler 210 Montauk',
-                'description' => 'Classic fishing boat with twin engines, perfect for offshore fishing',
-                'price' => 45000,
-                'currency' => 'USD',
-                'location' => 'Port Harcourt, Nigeria',
-                'category' => 'Boats',
-                'condition' => 'used',
-                'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=Boston+Whaler'],
-                'created_at' => now()->subDays(5)->toDateTimeString(),
-                'is_featured' => false,
-                'seller' => ['name' => 'Coastal Marine', 'verified' => true]
-            ],
-        ];
+        try {
+            $limit = min(20, max(1, (int) $request->get('limit', 12)));
+            
+            $equipment = EquipmentListing::with(['seller', 'category'])
+                ->active()
+                ->published()
+                ->notExpired()
+                ->orderBy('view_count', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->limit($limit)
+                ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => array_slice($popularEquipment, 0, $limit),
-            'meta' => [
-                'count' => count($popularEquipment),
-                'limit' => $limit,
-            ],
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $equipment,
+                'meta' => [
+                    'count' => $equipment->count(),
+                    'limit' => $limit,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch popular equipment',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -133,43 +164,49 @@ class EquipmentController extends Controller
      */
     public function search(Request $request): JsonResponse
     {
-        $request->validate([
-            'q' => 'required|string|min:2|max:255',
-            'page' => 'integer|min:1',
-            'per_page' => 'integer|min:1|max:50',
-        ]);
+        try {
+            $request->validate([
+                'q' => 'required|string|min:2|max:255',
+                'page' => 'integer|min:1',
+                'per_page' => 'integer|min:1|max:50',
+            ]);
 
-        $query = $request->get('q');
-        
-        $searchResults = [
-            [
-                'id' => 1,
-                'title' => 'Yamaha F115 Outboard Engine',
-                'description' => 'Reliable 115HP 4-stroke outboard engine in excellent condition',
-                'price' => 12500,
-                'currency' => 'USD',
-                'location' => 'Lagos, Nigeria',
-                'category' => 'Engines',
-                'condition' => 'used',
-                'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=Yamaha+Engine'],
-                'created_at' => now()->subDays(2)->toDateTimeString(),
-                'is_featured' => true,
-                'seller' => ['name' => 'Marine Equipment Store', 'verified' => true]
-            ],
-        ];
+            $query = $request->get('q');
+            $perPage = min(50, max(1, (int) $request->get('per_page', 12)));
+            
+            $equipment = EquipmentListing::with(['seller', 'category'])
+                ->active()
+                ->published()
+                ->notExpired()
+                ->where(function($q) use ($query) {
+                    $q->where('title', 'LIKE', '%' . $query . '%')
+                      ->orWhere('description', 'LIKE', '%' . $query . '%')
+                      ->orWhere('brand', 'LIKE', '%' . $query . '%')
+                      ->orWhere('model', 'LIKE', '%' . $query . '%');
+                })
+                ->orderBy('is_featured', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage);
 
-        return response()->json([
-            'success' => true,
-            'data' => $searchResults,
-            'meta' => [
-                'query' => $query,
-                'current_page' => 1,
-                'per_page' => 10,
-                'total' => count($searchResults),
-                'last_page' => 1,
-                'has_more' => false,
-            ],
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $equipment->items(),
+                'meta' => [
+                    'query' => $query,
+                    'current_page' => $equipment->currentPage(),
+                    'per_page' => $equipment->perPage(),
+                    'total' => $equipment->total(),
+                    'last_page' => $equipment->lastPage(),
+                    'has_more' => $equipment->hasMorePages(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to search equipment listings',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -213,45 +250,14 @@ class EquipmentController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $sampleListings = [
-                1 => [
-                    'id' => 1,
-                    'title' => 'Yamaha F115 Outboard Engine',
-                    'description' => 'Reliable 115HP 4-stroke outboard engine in excellent condition',
-                    'price' => 12500,
-                    'currency' => 'USD',
-                    'location' => 'Lagos, Nigeria',
-                    'category' => 'Engines',
-                    'condition' => 'used',
-                    'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=Yamaha+Engine'],
-                    'created_at' => now()->subDays(2)->toDateTimeString(),
-                    'is_featured' => true,
-                    'seller' => ['name' => 'Marine Equipment Store', 'verified' => true]
-                ],
-                2 => [
-                    'id' => 2,
-                    'title' => 'Boston Whaler 210 Montauk',
-                    'description' => 'Classic fishing boat with twin engines, perfect for offshore fishing',
-                    'price' => 45000,
-                    'currency' => 'USD',
-                    'location' => 'Port Harcourt, Nigeria',
-                    'category' => 'Boats',
-                    'condition' => 'used',
-                    'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=Boston+Whaler'],
-                    'created_at' => now()->subDays(5)->toDateTimeString(),
-                    'is_featured' => false,
-                    'seller' => ['name' => 'Coastal Marine', 'verified' => true]
-                ],
-            ];
+            $listing = EquipmentListing::with(['seller', 'category'])
+                ->active()
+                ->published()
+                ->notExpired()
+                ->findOrFail($id);
 
-            $listing = $sampleListings[$id] ?? null;
-
-            if (!$listing) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Listing not found',
-                ], 404);
-            }
+            // Increment view count
+            $listing->incrementViewCount();
 
             return response()->json([
                 'success' => true,
@@ -260,9 +266,9 @@ class EquipmentController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve listing',
+                'message' => 'Listing not found',
                 'error' => $e->getMessage(),
-            ], 500);
+            ], 404);
         }
     }
 

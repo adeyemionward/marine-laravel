@@ -92,80 +92,13 @@ class SellerController extends Controller
                 ->limit($limit)
                 ->get();
 
-            // Return sample data if no sellers in database
+            // Return empty array if no sellers in database - let frontend handle empty state
             if ($sellers->isEmpty()) {
-                $sampleSellers = [
-                    [
-                        'id' => 1,
-                        'user' => ['id' => 1, 'name' => 'Marine Pro Lagos'],
-                        'business_name' => 'Marine Pro Equipment Ltd',
-                        'business_description' => 'Leading marine equipment supplier in Lagos with over 8 years of experience serving the Nigerian maritime industry.',
-                        'location' => 'Lagos, Nigeria',
-                        'rating' => 4.9,
-                        'review_count' => 156,
-                        'years_active' => 8,
-                        'specialties' => ['Engines', 'Boats', 'Electronics'],
-                        'avatar' => 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-                        'total_listings' => 45,
-                        'response_time' => '< 2 hours',
-                        'verification_status' => 'approved',
-                        'is_featured' => true,
-                    ],
-                    [
-                        'id' => 2,
-                        'user' => ['id' => 2, 'name' => 'Rivers Marine Center'],
-                        'business_name' => 'Rivers Marine Solutions',
-                        'business_description' => 'Trusted marine equipment dealer specializing in fishing boats and commercial vessels for the Niger Delta region.',
-                        'location' => 'Port Harcourt, Rivers',
-                        'rating' => 4.8,
-                        'review_count' => 203,
-                        'years_active' => 12,
-                        'specialties' => ['Boats', 'Safety Equipment', 'Parts'],
-                        'avatar' => 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-                        'total_listings' => 67,
-                        'response_time' => '< 1 hour',
-                        'verification_status' => 'approved',
-                        'is_featured' => true,
-                    ],
-                    [
-                        'id' => 3,
-                        'user' => ['id' => 3, 'name' => 'Tech Marine Solutions'],
-                        'business_name' => 'Tech Marine Electronics',
-                        'business_description' => 'Specialized in marine electronics and navigation systems with certified technicians and warranty support.',
-                        'location' => 'Abuja, FCT',
-                        'rating' => 4.7,
-                        'review_count' => 89,
-                        'years_active' => 5,
-                        'specialties' => ['Electronics', 'Navigation', 'Communication'],
-                        'avatar' => 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150',
-                        'total_listings' => 32,
-                        'response_time' => '< 3 hours',
-                        'verification_status' => 'approved',
-                        'is_featured' => true,
-                    ],
-                    [
-                        'id' => 4,
-                        'user' => ['id' => 4, 'name' => 'Safety First Marine'],
-                        'business_name' => 'Safety First Marine Ltd',
-                        'business_description' => 'Dedicated to marine safety with comprehensive range of certified safety equipment and emergency gear.',
-                        'location' => 'Calabar, Cross River',
-                        'rating' => 4.9,
-                        'review_count' => 134,
-                        'years_active' => 10,
-                        'specialties' => ['Safety Equipment', 'Life Jackets', 'Emergency Gear'],
-                        'avatar' => 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150',
-                        'total_listings' => 28,
-                        'response_time' => '< 1 hour',
-                        'verification_status' => 'approved',
-                        'is_featured' => true,
-                    ],
-                ];
-
                 return response()->json([
                     'success' => true,
-                    'data' => array_slice($sampleSellers, 0, $limit),
+                    'data' => [],
                     'meta' => [
-                        'count' => min(count($sampleSellers), $limit),
+                        'count' => 0,
                         'limit' => $limit,
                     ],
                 ]);
