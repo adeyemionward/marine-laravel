@@ -2,6 +2,11 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+// Simple test route for debugging
+Route::get('/test', function () {
+    return response()->json(['message' => 'API routes working', 'timestamp' => now()]);
+});
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
@@ -10,6 +15,7 @@ use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\SellerController;
 
 // Public routes
 Route::prefix('v1')->group(function () {
@@ -32,6 +38,15 @@ Route::prefix('v1')->group(function () {
 
     // Banners
     Route::get('/banners', [BannerController::class, 'index']);
+
+    // Sellers (public routes)
+    Route::get('/sellers', [SellerController::class, 'index']);
+    Route::get('/sellers/featured', [SellerController::class, 'featured']);
+    Route::get('/sellers/{id}', [SellerController::class, 'show']);
+    Route::get('/sellers/{id}/listings', [SellerController::class, 'listings']);
+    Route::get('/sellers/{id}/stats', [SellerController::class, 'stats']);
+    Route::get('/sellers/{id}/reviews', [SellerController::class, 'reviews']);
+    Route::get('/seller/specialties', [SellerController::class, 'specialties']);
 
     // System settings (public ones)
     Route::get('/system/settings', [AdminController::class, 'publicSettings']);
@@ -71,6 +86,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/subscription/subscribe', [SubscriptionController::class, 'subscribe']);
     Route::post('/subscription/cancel', [SubscriptionController::class, 'cancel']);
     Route::get('/subscription/usage', [SubscriptionController::class, 'usage']);
+
+    // Seller applications (protected routes)
+    Route::post('/seller/apply', [SellerController::class, 'apply']);
+    Route::get('/seller/application-status', [SellerController::class, 'applicationStatus']);
 
     // Admin routes
     Route::middleware('role:admin,moderator')->prefix('admin')->group(function () {

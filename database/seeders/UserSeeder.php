@@ -6,19 +6,25 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use App\Models\UserProfile;
-use App\Enums\UserRole;
+use App\Models\Role;
 
 class UserSeeder extends Seeder
 {
     public function run(): void
     {
+        // Get roles
+        $adminRole = Role::where('name', 'admin')->first();
+        $sellerRole = Role::where('name', 'seller')->first();
+        $userRole = Role::where('name', 'user')->first();
+
         // Create admin user
         $adminUser = User::updateOrCreate(
-            ['email' => 'admin@marineng.com'],
+            ['email' => 'admin@marine.ng'],
             [
                 'name' => 'System Administrator',
-                'email' => 'admin@marineng.com',
-                'password' => Hash::make('password123'),
+                'email' => 'admin@marine.ng',
+                'password' => Hash::make('admin123'),
+                'role_id' => $adminRole->id,
                 'email_verified_at' => now(),
             ]
         );
@@ -28,7 +34,7 @@ class UserSeeder extends Seeder
             [
                 'user_id' => $adminUser->id,
                 'full_name' => 'System Administrator',
-                'role' => UserRole::ADMIN,
+                'role' => 'admin',
                 'is_active' => true,
                 'is_verified' => true,
                 'company_name' => 'Marine Engineering Nigeria',
@@ -41,26 +47,26 @@ class UserSeeder extends Seeder
             ]
         );
 
-        // Create moderator user
-        $moderatorUser = User::updateOrCreate(
-            ['email' => 'moderator@marineng.com'],
+        // Create test user
+        $testUser = User::updateOrCreate(
+            ['email' => 'user@marine.ng'],
             [
-                'name' => 'Content Moderator',
-                'email' => 'moderator@marineng.com',
-                'password' => Hash::make('password123'),
+                'name' => 'Test User',
+                'email' => 'user@marine.ng',
+                'password' => Hash::make('user123'),
+                'role_id' => $userRole->id,
                 'email_verified_at' => now(),
             ]
         );
 
         UserProfile::updateOrCreate(
-            ['user_id' => $moderatorUser->id],
+            ['user_id' => $testUser->id],
             [
-                'user_id' => $moderatorUser->id,
-                'full_name' => 'Content Moderator',
-                'role' => UserRole::MODERATOR,
+                'user_id' => $testUser->id,
+                'full_name' => 'Test User',
+                'role' => 'user',
                 'is_active' => true,
                 'is_verified' => true,
-                'company_name' => 'Marine Engineering Nigeria',
                 'phone' => '+234-800-123-4568',
                 'address' => '123 Marina Street',
                 'city' => 'Lagos',
@@ -111,7 +117,8 @@ class UserSeeder extends Seeder
                 [
                     'name' => $sellerData['name'],
                     'email' => $sellerData['email'],
-                    'password' => Hash::make('password123'),
+                    'password' => Hash::make('seller123'),
+                    'role_id' => $sellerRole->id,
                     'email_verified_at' => now(),
                 ]
             );
@@ -121,7 +128,7 @@ class UserSeeder extends Seeder
                 [
                     'user_id' => $user->id,
                     'full_name' => $sellerData['name'],
-                    'role' => UserRole::SELLER,
+                    'role' => 'seller',
                     'is_active' => true,
                     'is_verified' => true,
                     'company_name' => $sellerData['company_name'],
@@ -163,7 +170,8 @@ class UserSeeder extends Seeder
                 [
                     'name' => $buyerData['name'],
                     'email' => $buyerData['email'],
-                    'password' => Hash::make('password123'),
+                    'password' => Hash::make('user123'),
+                    'role_id' => $userRole->id,
                     'email_verified_at' => now(),
                 ]
             );
@@ -173,7 +181,7 @@ class UserSeeder extends Seeder
                 [
                     'user_id' => $user->id,
                     'full_name' => $buyerData['name'],
-                    'role' => UserRole::BUYER,
+                    'role' => 'user',
                     'is_active' => true,
                     'is_verified' => true,
                     'phone' => '+234-' . rand(700, 999) . '-' . rand(100, 999) . '-' . rand(1000, 9999),
