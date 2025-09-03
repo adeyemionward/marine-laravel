@@ -28,7 +28,10 @@ return [
         'http://127.0.0.1:5173',
         'https://marineng.com',
         'https://www.marineng.com',
-        'https://www.marine-ng.com'
+        'https://marine-ng.vercel.app',
+        'https://www.marine-ng.vercel.app',
+        env('FRONTEND_URL', 'https://marine-ng.vercel.app'),
+
     ],
 
     'allowed_origins_patterns' => [],
