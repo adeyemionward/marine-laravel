@@ -27,7 +27,8 @@ return [
         'http://127.0.0.1:3001',
         'http://127.0.0.1:5173',
         'https://marineng.com',
-        'https://www.marineng.com'
+        'https://www.marineng.com',
+        'https://www.marine-ng.com'
     ],
 
     'allowed_origins_patterns' => [],
