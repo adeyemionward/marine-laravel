@@ -65,6 +65,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/user/listings', [UserController::class, 'listings']);
     Route::get('/user/favorites', [UserController::class, 'favorites']);
     Route::get('/user/subscription', [UserController::class, 'subscription']);
+    Route::get('/user/stats', [UserController::class, 'stats']);
+    Route::get('/user/activity', [UserController::class, 'activity']);
+    Route::get('/user/dashboard', [UserController::class, 'dashboardOverview']);
 
     // Equipment CRUD operations
     Route::post('/equipment', [EquipmentController::class, 'store']);

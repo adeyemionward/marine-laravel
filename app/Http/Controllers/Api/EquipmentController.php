@@ -52,6 +52,12 @@ class EquipmentController extends Controller
                 });
             }
 
+            // Exclude specific IDs (for similar equipment)
+            if ($request->filled('exclude')) {
+                $excludeIds = is_array($request->exclude) ? $request->exclude : [$request->exclude];
+                $query->whereNotIn('id', $excludeIds);
+            }
+
             // Sort options
             switch ($request->get('sort', 'created_at')) {
                 case 'price_asc':
@@ -68,8 +74,21 @@ class EquipmentController extends Controller
                     $query->orderBy('created_at', 'desc');
             }
 
-            $perPage = min(50, max(1, (int) $request->get('per_page', 12)));
-            $equipment = $query->paginate($perPage);
+            // Pagination - handle both per_page and limit parameters
+            if ($request->filled('limit')) {
+                // For similar equipment requests, just take the specified number
+                $limit = min(20, max(1, (int) $request->get('limit', 8)));
+                $equipment = $query->limit($limit)->get();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $equipment,
+                ]);
+            } else {
+                // Standard pagination
+                $perPage = min(50, max(1, (int) $request->get('per_page', 12)));
+                $equipment = $query->paginate($perPage);
+            }
 
             return response()->json([
                 'success' => true,
@@ -215,32 +234,98 @@ class EquipmentController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            $newListing = [
-                'id' => rand(100, 999),
-                'title' => $request->input('title', 'New Equipment'),
-                'description' => $request->input('description', 'Equipment description'),
-                'price' => $request->input('price', 0),
-                'currency' => 'USD',
-                'location' => $request->input('location', 'Nigeria'),
-                'category' => $request->input('category', 'Equipment'),
-                'condition' => $request->input('condition', 'used'),
-                'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=New+Equipment'],
-                'created_at' => now()->toDateTimeString(),
-                'is_featured' => false,
-                'seller' => ['name' => 'Test Seller', 'verified' => false]
-            ];
+            $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'required|string|max:2000',
+                'price' => 'required|numeric|min:0',
+                'category_id' => 'required|exists:equipment_categories,id',
+                'condition' => 'required|in:new,like_new,good,fair,poor',
+                'brand' => 'nullable|string|max:100',
+                'model' => 'nullable|string|max:100',
+                'year' => 'nullable|integer|min:1900|max:' . (date('Y') + 1),
+                'location_state' => 'required|string|max:100',
+                'location_city' => 'nullable|string|max:100',
+                'images' => 'nullable|array|max:10',
+                'images.*' => 'file|mimes:jpeg,jpg,png|max:5120', // 5MB max
+                'specifications' => 'nullable|array',
+                'contact_phone' => 'nullable|string|max:20',
+                'contact_email' => 'nullable|email',
+                'negotiable' => 'boolean',
+            ]);
+
+            $user = $request->user();
+            
+            // Check if user has an active subscription and listing limits
+            $subscription = $user->activeSubscription();
+            if (!$subscription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Active subscription required to create listings',
+                ], 403);
+            }
+
+            // Check listing limits
+            $currentListings = EquipmentListing::where('seller_id', $user->id)
+                ->where('status', 'active')
+                ->count();
+            
+            if ($subscription->plan->max_listings !== -1 && 
+                $currentListings >= $subscription->plan->max_listings) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Listing limit reached for your subscription plan',
+                ], 403);
+            }
+
+            // Handle image uploads
+            $imagePaths = [];
+            if ($request->hasFile('images')) {
+                $maxImages = $subscription->plan->max_images_per_listing ?? 5;
+                $images = array_slice($request->file('images'), 0, $maxImages);
+                
+                foreach ($images as $image) {
+                    $path = $image->store('listings', 'public');
+                    $imagePaths[] = $path;
+                }
+            }
+
+            $listing = EquipmentListing::create([
+                'seller_id' => $user->id,
+                'title' => $request->title,
+                'description' => $request->description,
+                'price' => $request->price,
+                'category_id' => $request->category_id,
+                'condition' => $request->condition,
+                'brand' => $request->brand,
+                'model' => $request->model,
+                'year' => $request->year,
+                'location_state' => $request->location_state,
+                'location_city' => $request->location_city,
+                'images' => $imagePaths,
+                'specifications' => $request->specifications ?? [],
+                'contact_phone' => $request->contact_phone,
+                'contact_email' => $request->contact_email ?? $user->email,
+                'negotiable' => $request->boolean('negotiable', false),
+                'status' => 'active',
+                'published_at' => now(),
+            ]);
+
+            // Update seller profile listing count
+            if ($user->sellerProfile) {
+                $user->sellerProfile->updateListingCount();
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Listing created successfully',
-                'data' => $newListing,
+                'data' => $listing->load(['category', 'seller']),
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create listing',
                 'error' => $e->getMessage(),
-            ], 400);
+            ], 500);
         }
     }
 
@@ -278,33 +363,62 @@ class EquipmentController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         try {
-            $updatedListing = [
-                'id' => $id,
-                'title' => $request->input('title', 'Updated Equipment'),
-                'description' => $request->input('description', 'Updated description'),
-                'price' => $request->input('price', 0),
-                'currency' => 'USD',
-                'location' => $request->input('location', 'Nigeria'),
-                'category' => $request->input('category', 'Equipment'),
-                'condition' => $request->input('condition', 'used'),
-                'images' => ['https://via.placeholder.com/400x300/0066cc/ffffff?text=Updated+Equipment'],
-                'created_at' => now()->subWeek()->toDateTimeString(),
-                'updated_at' => now()->toDateTimeString(),
-                'is_featured' => false,
-                'seller' => ['name' => 'Test Seller', 'verified' => false]
-            ];
+            $request->validate([
+                'title' => 'sometimes|required|string|max:255',
+                'description' => 'sometimes|required|string|max:2000',
+                'price' => 'sometimes|required|numeric|min:0',
+                'category_id' => 'sometimes|required|exists:equipment_categories,id',
+                'condition' => 'sometimes|required|in:new,like_new,good,fair,poor',
+                'brand' => 'nullable|string|max:100',
+                'model' => 'nullable|string|max:100',
+                'year' => 'nullable|integer|min:1900|max:' . (date('Y') + 1),
+                'location_state' => 'sometimes|required|string|max:100',
+                'location_city' => 'nullable|string|max:100',
+                'images' => 'nullable|array|max:10',
+                'images.*' => 'file|mimes:jpeg,jpg,png|max:5120',
+                'specifications' => 'nullable|array',
+                'contact_phone' => 'nullable|string|max:20',
+                'contact_email' => 'nullable|email',
+                'negotiable' => 'boolean',
+            ]);
+
+            $user = $request->user();
+            $listing = EquipmentListing::where('seller_id', $user->id)
+                ->findOrFail($id);
+
+            // Handle new image uploads if provided
+            if ($request->hasFile('images')) {
+                $subscription = $user->activeSubscription();
+                $maxImages = $subscription->plan->max_images_per_listing ?? 5;
+                $images = array_slice($request->file('images'), 0, $maxImages);
+                
+                $imagePaths = [];
+                foreach ($images as $image) {
+                    $path = $image->store('listings', 'public');
+                    $imagePaths[] = $path;
+                }
+                
+                // Delete old images (optional - implement cleanup)
+                $listing->images = $imagePaths;
+            }
+
+            $listing->update($request->only([
+                'title', 'description', 'price', 'category_id', 'condition',
+                'brand', 'model', 'year', 'location_state', 'location_city',
+                'specifications', 'contact_phone', 'contact_email', 'negotiable'
+            ]));
 
             return response()->json([
                 'success' => true,
                 'message' => 'Listing updated successfully',
-                'data' => $updatedListing,
+                'data' => $listing->load(['category', 'seller']),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update listing',
                 'error' => $e->getMessage(),
-            ], 400);
+            ], 500);
         }
     }
 
@@ -314,6 +428,21 @@ class EquipmentController extends Controller
     public function destroy(Request $request, int $id): JsonResponse
     {
         try {
+            $user = $request->user();
+            $listing = EquipmentListing::where('seller_id', $user->id)
+                ->findOrFail($id);
+
+            // Soft delete the listing instead of hard delete
+            $listing->update([
+                'status' => 'deleted',
+                'deleted_at' => now(),
+            ]);
+
+            // Update seller profile listing count
+            if ($user->sellerProfile) {
+                $user->sellerProfile->updateListingCount();
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Listing deleted successfully',
@@ -323,7 +452,7 @@ class EquipmentController extends Controller
                 'success' => false,
                 'message' => 'Failed to delete listing',
                 'error' => $e->getMessage(),
-            ], 400);
+            ], 500);
         }
     }
 
