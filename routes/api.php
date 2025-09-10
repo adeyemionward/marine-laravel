@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\SellerController;
+use App\Http\Controllers\Api\CloudinaryController;
 
 // Public routes
 Route::prefix('v1')->group(function () {
@@ -73,6 +74,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/equipment', [EquipmentController::class, 'store']);
     Route::put('/equipment/{id}', [EquipmentController::class, 'update']);
     Route::delete('/equipment/{id}', [EquipmentController::class, 'destroy']);
+    Route::post('/equipment/{id}/images', [EquipmentController::class, 'uploadImages']);
     Route::post('/equipment/{id}/favorite', [EquipmentController::class, 'toggleFavorite']);
     Route::post('/equipment/{id}/sold', [EquipmentController::class, 'markSold']);
     Route::get('/equipment/{id}/analytics', [EquipmentController::class, 'analytics']);
@@ -93,6 +95,18 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Seller applications (protected routes)
     Route::post('/seller/apply', [SellerController::class, 'apply']);
     Route::get('/seller/application-status', [SellerController::class, 'applicationStatus']);
+    Route::get('/seller/dashboard', [SellerController::class, 'dashboard']);
+
+    // Cloudinary image management
+    Route::prefix('cloudinary')->group(function () {
+        Route::post('/signature', [CloudinaryController::class, 'getUploadSignature']);
+        Route::post('/upload', [CloudinaryController::class, 'uploadImage']);
+        Route::post('/upload-multiple', [CloudinaryController::class, 'uploadMultipleImages']);
+        Route::delete('/image', [CloudinaryController::class, 'deleteImage']);
+        Route::delete('/images', [CloudinaryController::class, 'deleteMultipleImages']);
+        Route::get('/url', [CloudinaryController::class, 'getOptimizedUrl']);
+        Route::get('/urls', [CloudinaryController::class, 'getMultipleUrls']);
+    });
 
     // Admin routes
     Route::middleware('role:admin,moderator')->prefix('admin')->group(function () {
@@ -118,5 +132,25 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/analytics/dashboard', [AdminController::class, 'dashboardAnalytics']);
         Route::get('/analytics/listings', [AdminController::class, 'listingAnalytics']);
         Route::get('/analytics/users', [AdminController::class, 'userAnalytics']);
+
+        // Seller Application Management
+        Route::get('/seller-applications', [AdminController::class, 'getSellerApplications']);
+        Route::get('/seller-applications/stats', [AdminController::class, 'getSellerApplicationStats']);
+        Route::get('/seller-applications/{id}', [AdminController::class, 'getSellerApplication']);
+        Route::post('/seller-applications/approve', [AdminController::class, 'approveSellerApplication']);
+        Route::post('/seller-applications/{id}/reject', [AdminController::class, 'rejectSellerApplication']);
+        Route::patch('/seller-applications/{id}/status', [AdminController::class, 'updateApplicationStatus']);
+
+        // Invoice Management
+        Route::post('/invoices/generate', [AdminController::class, 'generateSellerInvoice']);
+        Route::post('/invoices/{id}/send', [AdminController::class, 'sendSellerInvoice']);
+        Route::get('/invoices/{id}/download', [AdminController::class, 'downloadInvoice']);
+        Route::get('/documents/download', [AdminController::class, 'downloadSellerDocument']);
+
+        // Subscription Plans Management
+        Route::get('/subscription-plans', [AdminController::class, 'getSubscriptionPlans']);
+        Route::post('/subscription-plans', [AdminController::class, 'createSubscriptionPlan']);
+        Route::put('/subscription-plans/{id}', [AdminController::class, 'updateSubscriptionPlan']);
+        Route::delete('/subscription-plans/{id}', [AdminController::class, 'deleteSubscriptionPlan']);
     });
 });

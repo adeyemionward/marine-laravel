@@ -153,16 +153,34 @@ class SubscriptionController extends Controller
                 ->where('status', 'active')
                 ->first();
 
+            // Get current usage count
+            $listingsCount = \App\Models\EquipmentListing::where('seller_id', $userId)->count();
+
             if (!$subscription) {
+                // Return freemium tier limits for users without subscription
                 return response()->json([
-                    'success' => false,
-                    'message' => 'No active subscription found',
-                ], 404);
+                    'success' => true,
+                    'data' => [
+                        'plan_name' => 'Freemium',
+                        'plan_limits' => [
+                            'max_listings' => 5,
+                            'max_images_per_listing' => 5,
+                        ],
+                        'current_usage' => [
+                            'listings_count' => $listingsCount,
+                            'listings_remaining' => max(0, 5 - $listingsCount),
+                        ],
+                        'subscription_status' => [
+                            'status' => 'freemium',
+                            'expires_at' => null,
+                            'days_remaining' => null,
+                            'auto_renew' => false,
+                        ],
+                    ],
+                ]);
             }
 
-            // Get current usage
-            $listingsCount = \App\Models\EquipmentListing::where('seller_id', $userId)->count();
-            
+            // Return usage for users with active subscription
             return response()->json([
                 'success' => true,
                 'data' => [

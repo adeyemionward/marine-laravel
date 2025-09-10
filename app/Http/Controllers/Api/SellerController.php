@@ -413,4 +413,149 @@ class SellerController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get seller dashboard data
+     */
+    public function dashboard(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            
+            // Check if user has a seller profile
+            $sellerProfile = SellerProfile::where('user_id', $user->id)->first();
+            
+            if (!$sellerProfile) {
+                // User is not a seller yet, return application status
+                $application = SellerApplication::where('user_id', $user->id)
+                    ->latest()
+                    ->first();
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'is_seller' => false,
+                        'application_status' => $application ? [
+                            'status' => $application->status,
+                            'submitted_at' => $application->created_at,
+                            'reviewed_at' => $application->reviewed_at,
+                            'admin_notes' => $application->admin_notes,
+                        ] : null,
+                    ],
+                ]);
+            }
+
+            // Get comprehensive dashboard data
+            $currentMonth = now()->startOfMonth();
+            $lastMonth = now()->subMonth()->startOfMonth();
+            
+            // Get listings statistics
+            $activeListings = $sellerProfile->listings()
+                ->where('status', 'active')
+                ->count();
+            
+            $pendingListings = $sellerProfile->listings()
+                ->where('status', 'pending')
+                ->count();
+            
+            $soldListings = $sellerProfile->listings()
+                ->where('status', 'sold')
+                ->count();
+            
+            // Get recent listings
+            $recentListings = $sellerProfile->listings()
+                ->with(['category', 'images'])
+                ->orderBy('created_at', 'desc')
+                ->limit(5)
+                ->get();
+            
+            // Get views and inquiries
+            $totalViews = $sellerProfile->listings()
+                ->sum('views');
+            
+            $monthlyViews = $sellerProfile->listings()
+                ->join('equipment_views', 'equipment.id', '=', 'equipment_views.equipment_id')
+                ->where('equipment_views.created_at', '>=', $currentMonth)
+                ->count();
+            
+            // Get recent reviews
+            $recentReviews = $sellerProfile->reviews()
+                ->with(['reviewer', 'listing'])
+                ->orderBy('created_at', 'desc')
+                ->limit(5)
+                ->get();
+            
+            // Get messages/inquiries count
+            $unreadMessages = DB::table('conversations')
+                ->join('messages', 'conversations.id', '=', 'messages.conversation_id')
+                ->where('conversations.seller_id', $user->id)
+                ->where('messages.is_read', false)
+                ->where('messages.sender_id', '!=', $user->id)
+                ->count();
+            
+            // Calculate growth metrics
+            $currentMonthListings = $sellerProfile->listings()
+                ->where('created_at', '>=', $currentMonth)
+                ->count();
+            
+            $lastMonthListings = $sellerProfile->listings()
+                ->whereBetween('created_at', [$lastMonth, $currentMonth])
+                ->count();
+            
+            $listingsGrowth = $lastMonthListings > 0 
+                ? (($currentMonthListings - $lastMonthListings) / $lastMonthListings) * 100 
+                : 0;
+            
+            // Get performance metrics
+            $avgResponseTime = DB::table('conversations')
+                ->join('messages', 'conversations.id', '=', 'messages.conversation_id')
+                ->where('conversations.seller_id', $user->id)
+                ->where('messages.sender_id', $user->id)
+                ->whereNotNull('messages.response_time_minutes')
+                ->avg('messages.response_time_minutes');
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'is_seller' => true,
+                    'seller_profile' => [
+                        'id' => $sellerProfile->id,
+                        'business_name' => $sellerProfile->business_name,
+                        'rating' => $sellerProfile->rating,
+                        'review_count' => $sellerProfile->review_count,
+                        'is_featured' => $sellerProfile->is_featured,
+                        'is_verified' => $sellerProfile->is_verified,
+                        'specialties' => $sellerProfile->specialties,
+                    ],
+                    'statistics' => [
+                        'listings' => [
+                            'active' => $activeListings,
+                            'pending' => $pendingListings,
+                            'sold' => $soldListings,
+                            'total' => $activeListings + $pendingListings + $soldListings,
+                        ],
+                        'views' => [
+                            'total' => $totalViews,
+                            'monthly' => $monthlyViews,
+                        ],
+                        'messages' => [
+                            'unread' => $unreadMessages,
+                        ],
+                        'performance' => [
+                            'avg_response_time' => $avgResponseTime ? round($avgResponseTime) : null,
+                            'listings_growth' => round($listingsGrowth, 1),
+                        ],
+                    ],
+                    'recent_listings' => $recentListings,
+                    'recent_reviews' => $recentReviews,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch dashboard data',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

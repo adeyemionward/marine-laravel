@@ -528,4 +528,67 @@ class EquipmentController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Upload images for existing listing
+     */
+    public function uploadImages(Request $request, int $id): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            
+            // Find the listing and verify ownership
+            $listing = EquipmentListing::where('seller_id', $user->id)
+                ->findOrFail($id);
+
+            // Validate images
+            $request->validate([
+                'images' => 'required|array|max:10',
+                'images.*' => 'file|mimes:jpeg,jpg,png|max:5120', // 5MB max
+            ]);
+
+            // Check subscription limits
+            $subscription = $user->activeSubscription();
+            if (!$subscription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Active subscription required to upload images'
+                ], 403);
+            }
+
+            $maxImages = $subscription->plan->max_images_per_listing ?? 5;
+            $images = array_slice($request->file('images'), 0, $maxImages);
+            
+            $imagePaths = [];
+            foreach ($images as $image) {
+                $path = $image->store('listings', 'public');
+                $imagePaths[] = $path;
+            }
+            
+            // Merge with existing images or replace them
+            $existingImages = $listing->images ?? [];
+            $allImages = array_merge($existingImages, $imagePaths);
+            
+            // Limit total images
+            $listing->images = array_slice($allImages, 0, $maxImages);
+            $listing->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Images uploaded successfully',
+                'data' => [
+                    'listing_id' => $listing->id,
+                    'images' => $listing->images,
+                    'total_images' => count($listing->images)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload images',
+                'error' => $e->getMessage(),
+            ], 400);
+        }
+    }
 }

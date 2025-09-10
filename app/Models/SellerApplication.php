@@ -76,7 +76,7 @@ class SellerApplication extends Model
         ]);
 
         // Create or update seller profile
-        SellerProfile::updateOrCreate(
+        $sellerProfile = SellerProfile::updateOrCreate(
             ['user_id' => $this->user_id],
             [
                 'business_name' => $this->business_name,
@@ -88,6 +88,12 @@ class SellerApplication extends Model
                 'verification_documents' => $this->business_documents,
             ]
         );
+
+        // Update user role to seller and set seller_profile_id
+        $this->user->update([
+            'role' => 'seller',
+            'seller_profile_id' => $sellerProfile->id,
+        ]);
 
         // Update user profile verification status
         $this->user->profile->update([
