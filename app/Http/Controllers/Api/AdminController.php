@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\UserProfile;
 use App\Models\SystemSetting;
 use App\Models\SellerApplication;
+use App\Models\SubscriptionPlan;
 use App\Http\Resources\EquipmentListingResource;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
@@ -538,6 +539,136 @@ class AdminController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update application status',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // Subscription Plan Management Methods
+
+    public function getSubscriptionPlans(): JsonResponse
+    {
+        try {
+            $plans = SubscriptionPlan::active()
+                ->orderBy('sort_order')
+                ->orderBy('price', 'asc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $plans,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch subscription plans',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function createSubscriptionPlan(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'tier' => 'required|string|in:freemium,premium,enterprise',
+                'description' => 'required|string',
+                'price' => 'required|numeric|min:0',
+                'billing_cycle' => 'required|string|in:monthly,yearly',
+                'features' => 'nullable|array',
+                'limits' => 'nullable|array',
+                'max_listings' => 'nullable|integer|min:-1',
+                'max_images_per_listing' => 'nullable|integer|min:1',
+                'priority_support' => 'nullable|boolean',
+                'analytics_access' => 'nullable|boolean',
+                'custom_branding' => 'nullable|boolean',
+                'is_active' => 'nullable|boolean',
+                'sort_order' => 'nullable|integer',
+            ]);
+
+            $validated['created_by'] = auth()->id();
+            $validated['is_active'] = $validated['is_active'] ?? true;
+
+            $plan = SubscriptionPlan::create($validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Subscription plan created successfully',
+                'data' => $plan,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create subscription plan',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateSubscriptionPlan(Request $request, $id): JsonResponse
+    {
+        try {
+            $plan = SubscriptionPlan::findOrFail($id);
+
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'tier' => 'sometimes|string|in:freemium,premium,enterprise',
+                'description' => 'sometimes|string',
+                'price' => 'sometimes|numeric|min:0',
+                'billing_cycle' => 'sometimes|string|in:monthly,yearly',
+                'features' => 'nullable|array',
+                'limits' => 'nullable|array',
+                'max_listings' => 'nullable|integer|min:-1',
+                'max_images_per_listing' => 'nullable|integer|min:1',
+                'priority_support' => 'nullable|boolean',
+                'analytics_access' => 'nullable|boolean',
+                'custom_branding' => 'nullable|boolean',
+                'is_active' => 'nullable|boolean',
+                'sort_order' => 'nullable|integer',
+            ]);
+
+            $plan->update($validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Subscription plan updated successfully',
+                'data' => $plan->fresh(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update subscription plan',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function deleteSubscriptionPlan($id): JsonResponse
+    {
+        try {
+            $plan = SubscriptionPlan::findOrFail($id);
+
+            // Check if plan has active subscriptions
+            $hasActiveSubscriptions = $plan->activeSubscriptions()->exists();
+            
+            if ($hasActiveSubscriptions) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete plan with active subscriptions. Deactivate it instead.',
+                ], 400);
+            }
+
+            $plan->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Subscription plan deleted successfully',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete subscription plan',
                 'error' => $e->getMessage(),
             ], 500);
         }
