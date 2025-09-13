@@ -150,4 +150,25 @@ class BannerController extends Controller
             ], 500);
         }
     }
+
+    public function active(): JsonResponse
+    {
+        try {
+            $banners = Banner::where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('created_at', 'desc')
+                ->get(['id', 'title', 'description', 'image_url', 'link_url', 'position', 'sort_order']);
+
+            return response()->json([
+                'success' => true,
+                'data' => $banners,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch active banners',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

@@ -97,6 +97,15 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/seller/application-status', [SellerController::class, 'applicationStatus']);
     Route::get('/seller/dashboard', [SellerController::class, 'dashboard']);
 
+    // User invoice management
+    Route::prefix('user')->group(function () {
+        Route::get('/invoices', [AdminController::class, 'getUserInvoices']);
+        Route::get('/invoices/{id}', [AdminController::class, 'getUserInvoice']);
+        Route::post('/invoices/{id}/mark-paid', [AdminController::class, 'markInvoiceAsPaid']);
+        Route::post('/invoices/{id}/payment-proof', [AdminController::class, 'submitPaymentProof']);
+        Route::get('/invoices/{id}/download', [AdminController::class, 'downloadUserInvoice']);
+    });
+
     // Cloudinary image management
     Route::prefix('cloudinary')->group(function () {
         Route::post('/signature', [CloudinaryController::class, 'getUploadSignature']);
@@ -115,23 +124,69 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/listings/{id}/approve', [AdminController::class, 'approveListing']);
         Route::post('/listings/{id}/reject', [AdminController::class, 'rejectListing']);
         Route::post('/listings/{id}/feature', [AdminController::class, 'featureListing']);
+        
+        // Listing moderation
+        Route::get('/listings/moderation', [AdminController::class, 'getListingsForModeration']);
+        Route::post('/listings/{id}/moderate', [AdminController::class, 'moderateListing']);
+        Route::post('/listings/{id}/extend', [AdminController::class, 'extendListingExpiration']);
+        Route::post('/listings/cleanup', [AdminController::class, 'runAutoCleanup']);
+        Route::get('/listings/moderation/stats', [AdminController::class, 'getModerationStats']);
 
         // User management
         Route::get('/users', [AdminController::class, 'users']);
+        Route::post('/users', [AdminController::class, 'createUser']);
+        Route::put('/users/{id}', [AdminController::class, 'updateUser']);
+        Route::get('/users/search', [AdminController::class, 'searchUsers']);
+        Route::get('/users/stats', [AdminController::class, 'getUserStats']);
+        Route::get('/users/export', [AdminController::class, 'exportUsers']);
+        Route::get('/users/{id}', [AdminController::class, 'getUser']);
+        Route::get('/users/{id}/activity', [AdminController::class, 'getUserActivity']);
+        Route::get('/users/{id}/login-history', [AdminController::class, 'getUserLoginHistory']);
+        Route::get('/users/{id}/permissions', [AdminController::class, 'getUserPermissions']);
+        Route::put('/users/{id}/permissions', [AdminController::class, 'updateUserPermissions']);
         Route::post('/users/{id}/verify', [AdminController::class, 'verifyUser']);
+        Route::post('/users/{id}/verify-email', [AdminController::class, 'verifyUserEmail']);
         Route::post('/users/{id}/ban', [AdminController::class, 'banUser']);
+        Route::post('/users/{id}/unban', [AdminController::class, 'unbanUser']);
+        Route::post('/users/{id}/suspend', [AdminController::class, 'suspendUser']);
+        Route::post('/users/{id}/unsuspend', [AdminController::class, 'unsuspendUser']);
+        Route::post('/users/{id}/message', [AdminController::class, 'sendUserMessage']);
+        Route::post('/users/{id}/reset-password', [AdminController::class, 'resetUserPassword']);
+        Route::delete('/users/{id}', [AdminController::class, 'deleteUser']);
+        Route::put('/users/{id}/status', [AdminController::class, 'updateUserStatus']);
+        Route::put('/users/{id}/role', [AdminController::class, 'updateUserRole']);
+        Route::post('/users/{id}/promote-to-seller', [AdminController::class, 'promoteToSeller']);
+        
+        // Email Verification
+        Route::post('/email/verification', [AdminController::class, 'createEmailVerification']);
+        Route::post('/email/verify-code', [AdminController::class, 'verifyEmailCode']);
+        
+        // User subscription management
+        Route::post('/users/{id}/subscription', [AdminController::class, 'createUserSubscription']);
+        Route::put('/users/{id}/subscription/upgrade', [AdminController::class, 'upgradeUserSubscription']);
+        Route::post('/users/{id}/subscription/cancel', [AdminController::class, 'cancelUserSubscription']);
 
         // Banner management
-        Route::apiResource('banners', BannerController::class)->except(['index']);
+        Route::apiResource('banners', BannerController::class);
+        Route::get('/banners/active', [BannerController::class, 'active']);
+        Route::get('/banners/revenue-analytics', [AdminController::class, 'getBannerRevenueAnalytics']);
+        Route::get('/banners/pricing-tiers', [AdminController::class, 'getBannerPricingTiers']);
 
         // System settings
         Route::get('/settings', [AdminController::class, 'settings']);
         Route::put('/settings', [AdminController::class, 'updateSettings']);
+        Route::get('/system/settings', [AdminController::class, 'getAllSystemSettings']);
+        Route::put('/system/setting', [AdminController::class, 'updateSystemSetting']);
+        Route::delete('/system/setting/{key}', [AdminController::class, 'deleteSystemSetting']);
 
         // Analytics
         Route::get('/analytics/dashboard', [AdminController::class, 'dashboardAnalytics']);
         Route::get('/analytics/listings', [AdminController::class, 'listingAnalytics']);
         Route::get('/analytics/users', [AdminController::class, 'userAnalytics']);
+        Route::get('/dashboard/analytics', [AdminController::class, 'dashboardAnalytics']);
+        
+        // System Metrics
+        Route::get('/system/metrics', [AdminController::class, 'getSystemMetrics']);
 
         // Seller Application Management
         Route::get('/seller-applications', [AdminController::class, 'getSellerApplications']);
@@ -142,6 +197,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::patch('/seller-applications/{id}/status', [AdminController::class, 'updateApplicationStatus']);
 
         // Invoice Management
+        Route::get('/invoices', [AdminController::class, 'getInvoices']);
+        Route::get('/invoices/stats', [AdminController::class, 'getInvoiceStats']);
+        Route::get('/invoices/{id}', [AdminController::class, 'getInvoice']);
+        Route::post('/invoices', [AdminController::class, 'createInvoice']);
         Route::post('/invoices/generate', [AdminController::class, 'generateSellerInvoice']);
         Route::post('/invoices/{id}/send', [AdminController::class, 'sendSellerInvoice']);
         Route::get('/invoices/{id}/download', [AdminController::class, 'downloadInvoice']);
@@ -149,6 +208,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
         // Subscription Plans Management
         Route::get('/subscription-plans', [AdminController::class, 'getSubscriptionPlans']);
+        Route::get('/subscription-plans/{id}/stats', [AdminController::class, 'getSubscriptionPlanStats']);
         Route::post('/subscription-plans', [AdminController::class, 'createSubscriptionPlan']);
         Route::put('/subscription-plans/{id}', [AdminController::class, 'updateSubscriptionPlan']);
         Route::delete('/subscription-plans/{id}', [AdminController::class, 'deleteSubscriptionPlan']);

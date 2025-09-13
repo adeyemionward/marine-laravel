@@ -35,6 +35,11 @@ class Subscription extends Model
         'auto_renew' => 'boolean',
     ];
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function userProfile(): BelongsTo
     {
         return $this->belongsTo(UserProfile::class, 'user_id');

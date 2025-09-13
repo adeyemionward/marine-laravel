@@ -141,6 +141,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get user's subscription (for single subscription access).
+     */
+    public function subscription(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    /**
      * Get user's active subscription.
      */
     public function activeSubscription()
