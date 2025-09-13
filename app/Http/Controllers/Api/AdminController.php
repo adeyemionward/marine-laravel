@@ -2521,11 +2521,16 @@ class AdminController extends Controller
                 'pending' => Invoice::where('status', 'pending')->count(),
                 'paid' => Invoice::where('status', 'paid')->count(),
                 'overdue' => Invoice::where('status', 'overdue')->count(),
+                'processing' => Invoice::where('status', 'processing')->count(),
                 'cancelled' => Invoice::where('status', 'cancelled')->count(),
-                'total_amount' => Invoice::sum('total_amount'),
+                // Total Revenue = only paid and approved invoices
+                'total_amount' => Invoice::where('status', 'paid')->sum('total_amount'),
+                // Unpaid Revenue = pending + overdue + processing
+                'unpaid_amount' => Invoice::whereIn('status', ['pending', 'overdue', 'processing'])->sum('total_amount'),
                 'pending_amount' => Invoice::where('status', 'pending')->sum('total_amount'),
                 'paid_amount' => Invoice::where('status', 'paid')->sum('total_amount'),
                 'overdue_amount' => Invoice::where('status', 'overdue')->sum('total_amount'),
+                'processing_amount' => Invoice::where('status', 'processing')->sum('total_amount'),
             ];
 
             // Monthly revenue for current year
@@ -2730,47 +2735,86 @@ class AdminController extends Controller
             
             $validated = $request->validate([
                 'payment_reference' => 'required|string|max:255',
-                'payment_method' => 'required|string|max:100',
-                'payment_notes' => 'nullable|string|max:500',
-                'payment_proof' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120', // 5MB max
+                'payment_method' => 'required|string|in:bank_transfer,online_payment,mobile_money,cash,check',
+                'payment_notes' => 'nullable|string|max:1000',
+                'payment_proof' => 'required|file|mimes:pdf,jpg,jpeg,png,gif|max:5120', // 5MB max
             ]);
 
             $invoice = Invoice::where('user_id', $userId)
                              ->whereIn('status', ['pending', 'overdue'])
                              ->findOrFail($id);
 
-            // Handle file upload if provided
-            $proofPath = null;
-            if ($request->hasFile('payment_proof')) {
-                $file = $request->file('payment_proof');
-                $filename = time() . '_' . $file->getClientOriginalName();
-                $proofPath = $file->storeAs('payment_proofs', $filename, 'public');
-            }
-
-            // Update invoice with payment proof (but keep status as pending for admin review)
-            $paymentInfo = "\n\nPayment Proof Submitted:\n" . 
-                          "Reference: " . $validated['payment_reference'] . "\n" .
-                          "Method: " . $validated['payment_method'] . "\n" .
-                          "Notes: " . ($validated['payment_notes'] ?? 'N/A') . "\n";
+            // Handle file upload to Cloudinary
+            $proofPublicId = null;
+            $proofUrl = null;
             
-            if ($proofPath) {
-                $paymentInfo .= "Proof Document: " . $proofPath . "\n";
+            if ($request->hasFile('payment_proof')) {
+                $cloudinaryService = app(\App\Services\CloudinaryService::class);
+                
+                $uploadResult = $cloudinaryService->uploadImage(
+                    $request->file('payment_proof'),
+                    'documents', // Use documents folder
+                    [
+                        'tags' => 'payment_proof,invoice_' . $invoice->id,
+                        'public_id' => 'payment_proof_' . $invoice->id . '_' . time()
+                    ]
+                );
+
+                if ($uploadResult['success']) {
+                    $proofPublicId = $uploadResult['data']['public_id'];
+                    $proofUrl = $uploadResult['data']['secure_url'];
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Failed to upload payment proof document',
+                        'error' => $uploadResult['error']
+                    ], 400);
+                }
             }
 
+            // Update invoice with payment proof data and change status to processing
             $invoice->update([
-                'notes' => ($invoice->notes ?? '') . $paymentInfo
+                'status' => 'processing',
+                'payment_reference' => $validated['payment_reference'],
+                'payment_method' => $validated['payment_method'],
+                'payment_notes' => $validated['payment_notes'],
+                'payment_proof_public_id' => $proofPublicId,
+                'payment_proof_url' => $proofUrl,
+                'payment_submitted_at' => now()
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Payment proof submitted successfully. Admin will review and update status.',
-                'data' => $invoice->fresh(),
+                'data' => [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'status' => $invoice->status,
+                    'payment_reference' => $invoice->payment_reference,
+                    'payment_method' => $invoice->payment_method,
+                    'payment_submitted_at' => $invoice->payment_submitted_at,
+                    'payment_proof_url' => $proofUrl
+                ]
             ]);
-        } catch (\Exception $e) {
+            
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to submit payment proof',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Payment proof submission failed', [
+                'invoice_id' => $id,
+                'user_id' => $userId ?? null,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit payment proof. Please try again.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -2798,6 +2842,76 @@ class AdminController extends Controller
                 'success' => false,
                 'message' => 'Failed to prepare invoice download or access denied',
                 'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Approve or reject payment proof for an invoice (admin only)
+     */
+    public function approvePayment(Request $request, $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'action' => 'required|string|in:approve,reject',
+                'notes' => 'nullable|string|max:500'
+            ]);
+
+            $invoice = Invoice::where('status', 'processing')
+                             ->findOrFail($id);
+
+            if ($validated['action'] === 'approve') {
+                $invoice->update([
+                    'status' => 'paid',
+                    'paid_at' => now(),
+                    'notes' => $invoice->notes . "\n\nPayment approved by admin: " . auth()->user()->name . " on " . now()
+                ]);
+
+                $message = 'Payment proof approved and invoice marked as paid';
+            } else {
+                $invoice->update([
+                    'status' => 'pending',
+                    'payment_reference' => null,
+                    'payment_method' => null,
+                    'payment_notes' => null,
+                    'payment_proof_public_id' => null,
+                    'payment_proof_url' => null,
+                    'payment_submitted_at' => null,
+                    'notes' => $invoice->notes . "\n\nPayment proof rejected by admin: " . auth()->user()->name . " on " . now() . 
+                               ($validated['notes'] ? "\nReason: " . $validated['notes'] : '')
+                ]);
+
+                $message = 'Payment proof rejected and invoice reset to pending';
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'data' => [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'status' => $invoice->status,
+                    'paid_at' => $invoice->paid_at
+                ]
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Payment approval failed', [
+                'invoice_id' => $id,
+                'admin_id' => auth()->id(),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process payment approval',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }

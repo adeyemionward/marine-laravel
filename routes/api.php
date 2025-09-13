@@ -204,6 +204,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/invoices/generate', [AdminController::class, 'generateSellerInvoice']);
         Route::post('/invoices/{id}/send', [AdminController::class, 'sendSellerInvoice']);
         Route::get('/invoices/{id}/download', [AdminController::class, 'downloadInvoice']);
+        Route::post('/invoices/{id}/approve-payment', [AdminController::class, 'approvePayment']);
         Route::get('/documents/download', [AdminController::class, 'downloadSellerDocument']);
 
         // Subscription Plans Management

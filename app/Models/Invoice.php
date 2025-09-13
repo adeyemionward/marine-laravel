@@ -28,7 +28,13 @@ class Invoice extends Model
         'company_name',
         'generated_by',
         'sent_at',
-        'paid_at'
+        'paid_at',
+        'payment_reference',
+        'payment_method',
+        'payment_notes',
+        'payment_proof_public_id',
+        'payment_proof_url',
+        'payment_submitted_at'
     ];
 
     protected $casts = [
@@ -41,6 +47,7 @@ class Invoice extends Model
         'due_date' => 'date',
         'sent_at' => 'datetime',
         'paid_at' => 'datetime',
+        'payment_submitted_at' => 'datetime',
     ];
 
     // Relationships
