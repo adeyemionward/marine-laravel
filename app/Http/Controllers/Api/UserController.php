@@ -137,11 +137,20 @@ class UserController extends Controller
     public function subscription(): JsonResponse
     {
         try {
-            $userId = Auth::user()->profile->id;
-            
+            $user = Auth::user();
+            $userId = $user->profile ? $user->profile->id : null;
+
+            if (!$userId) {
+                return response()->json([
+                    'success' => true,
+                    'data' => null,
+                    'message' => 'No active subscription found',
+                ]);
+            }
+
             $subscription = Subscription::where('user_id', $userId)
                 ->with('plan')
-                ->where('status', 'active')
+                ->active()
                 ->first();
 
             if (!$subscription) {

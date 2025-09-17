@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 use App\Enums\ListingStatus;
 use App\Enums\EquipmentCondition;
+use App\Models\User;
 
 class EquipmentListing extends Model
 {
@@ -46,6 +47,8 @@ class EquipmentListing extends Model
         'allows_test_drive',
         'status',
         'is_featured',
+        'priority',
+        'featured_until',
         'is_verified',
         'view_count',
         'inquiry_count',
@@ -78,6 +81,7 @@ class EquipmentListing extends Model
         'tags' => 'array',
         'published_at' => 'datetime',
         'expires_at' => 'datetime',
+        'featured_until' => 'datetime',
         'year' => 'integer',
         'view_count' => 'integer',
         'inquiry_count' => 'integer',
@@ -87,7 +91,7 @@ class EquipmentListing extends Model
     // Relationships
     public function seller(): BelongsTo
     {
-        return $this->belongsTo(UserProfile::class, 'seller_id');
+        return $this->belongsTo(User::class, 'seller_id');
     }
 
     public function category(): BelongsTo
@@ -108,6 +112,11 @@ class EquipmentListing extends Model
     public function inquiries(): HasMany
     {
         return $this->hasMany(Inquiry::class, 'listing_id');
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 
     // Scopes

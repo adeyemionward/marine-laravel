@@ -10,23 +10,133 @@ use Illuminate\Support\Facades\Auth;
 
 class BannerController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
-            $banners = Banner::active()
-                ->orderBy('priority')
-                ->orderBy('created_at', 'desc')
-                ->get(['id', 'title', 'description', 'media_url', 'link_url', 'position', 'priority']);
+            $query = Banner::active()->paid();
+
+            // Filter by display context (homepage, category, etc.)
+            if ($request->has('context')) {
+                $query->forContext($request->input('context'));
+            }
+
+            // Filter by position (hero, category_row, etc.)
+            if ($request->has('position')) {
+                $query->forPosition($request->input('position'));
+            }
+
+            // Filter by banner type
+            if ($request->has('type')) {
+                $query->forBannerType($request->input('type'));
+            }
+
+            // Filter by device type
+            if ($request->has('device')) {
+                $query->forDevice($request->input('device'));
+            }
+
+            // Filter by category
+            if ($request->has('category_id')) {
+                $query->forCategory($request->input('category_id'));
+            }
+
+            // Exclude banners that have reached their limits
+            $query->where(function($q) {
+                $q->whereNull('max_impressions')
+                  ->orWhereRaw('impression_count < max_impressions');
+            });
+
+            $query->where(function($q) {
+                $q->whereNull('max_clicks')
+                  ->orWhereRaw('click_count < max_clicks');
+            });
+
+            $banners = $query
+                ->byPriority()
+                ->with('targetCategory')
+                ->get([
+                    'id',
+                    'title',
+                    'description',
+                    'media_type',
+                    'media_url',
+                    'link_url',
+                    'banner_type',
+                    'position',
+                    'priority',
+                    'banner_size',
+                    'dimensions',
+                    'mobile_dimensions',
+                    'display_context',
+                    'background_color',
+                    'text_color',
+                    'button_text',
+                    'button_color',
+                    'overlay_settings',
+                    'target_category_id',
+                    'start_date',
+                    'end_date'
+                ]);
+
+            // Group banners by position for easier frontend consumption
+            $groupedBanners = $banners->groupBy('position');
 
             return response()->json([
                 'success' => true,
-                'data' => $banners,
+                'data' => $groupedBanners,
+                'total' => $banners->count(),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch banners',
                 'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function trackClick(Request $request, $id): JsonResponse
+    {
+        try {
+            $banner = Banner::findOrFail($id);
+            $banner->increment('click_count');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Click tracked successfully',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to track click',
+            ], 500);
+        }
+    }
+
+    public function trackImpression(Request $request, $id): JsonResponse
+    {
+        try {
+            $banner = Banner::findOrFail($id);
+
+            // Check if banner has reached max impressions
+            if ($banner->hasReachedMaxImpressions()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Banner has reached maximum impressions',
+                ], 400);
+            }
+
+            $banner->increment('impression_count');
+            $banner->updateConversionRate();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Impression tracked successfully',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to track impression',
             ], 500);
         }
     }
@@ -167,6 +277,164 @@ class BannerController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch active banners',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get banners for homepage with Jumia-style layout
+     */
+    public function getHomepageBanners(Request $request): JsonResponse
+    {
+        try {
+            $device = $request->input('device', 'desktop');
+
+            $banners = [
+                'hero' => Banner::active()->paid()
+                    ->forContext(Banner::CONTEXT_HOMEPAGE)
+                    ->forPosition(Banner::POSITION_HERO)
+                    ->forDevice($device)
+                    ->byPriority()
+                    ->limit(3)
+                    ->get(),
+
+                'category_row' => Banner::active()->paid()
+                    ->forContext(Banner::CONTEXT_HOMEPAGE)
+                    ->forPosition(Banner::POSITION_CATEGORY_ROW)
+                    ->forDevice($device)
+                    ->byPriority()
+                    ->limit(8)
+                    ->get(),
+
+                'product_promotion' => Banner::active()->paid()
+                    ->forContext(Banner::CONTEXT_HOMEPAGE)
+                    ->forPosition(Banner::POSITION_PRODUCT_PROMOTION)
+                    ->forDevice($device)
+                    ->byPriority()
+                    ->limit(4)
+                    ->get(),
+
+                'sidebar' => Banner::active()->paid()
+                    ->forContext(Banner::CONTEXT_HOMEPAGE)
+                    ->forPosition(Banner::POSITION_SIDEBAR)
+                    ->forDevice($device)
+                    ->byPriority()
+                    ->limit(2)
+                    ->get(),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $banners,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch homepage banners',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get banners for category pages
+     */
+    public function getCategoryBanners(Request $request): JsonResponse
+    {
+        try {
+            $categoryId = $request->input('category_id');
+            $device = $request->input('device', 'desktop');
+
+            $banners = [
+                'listing_top' => Banner::active()->paid()
+                    ->forContext(Banner::CONTEXT_CATEGORY)
+                    ->forPosition(Banner::POSITION_LISTING_TOP)
+                    ->forCategory($categoryId)
+                    ->forDevice($device)
+                    ->byPriority()
+                    ->limit(2)
+                    ->get(),
+
+                'sidebar' => Banner::active()->paid()
+                    ->forContext(Banner::CONTEXT_CATEGORY)
+                    ->forPosition(Banner::POSITION_SIDEBAR)
+                    ->forCategory($categoryId)
+                    ->forDevice($device)
+                    ->byPriority()
+                    ->limit(3)
+                    ->get(),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $banners,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch category banners',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get banners for listing detail pages
+     */
+    public function getListingDetailBanners(Request $request): JsonResponse
+    {
+        try {
+            $categoryId = $request->input('category_id');
+            $device = $request->input('device', 'desktop');
+
+            $banners = Banner::active()->paid()
+                ->forContext(Banner::CONTEXT_LISTING_DETAIL)
+                ->forPosition(Banner::POSITION_DETAIL_SIDEBAR)
+                ->forCategory($categoryId)
+                ->forDevice($device)
+                ->byPriority()
+                ->limit(3)
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $banners,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch listing detail banners',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get banner configuration options
+     */
+    public function getConfiguration(): JsonResponse
+    {
+        try {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'positions' => Banner::getPositions(),
+                    'sizes' => Banner::getSizes(),
+                    'contexts' => Banner::getContexts(),
+                    'types' => [
+                        Banner::TYPE_PROMOTIONAL => 'Promotional',
+                        Banner::TYPE_SPONSORED => 'Sponsored',
+                        Banner::TYPE_CATEGORY => 'Category',
+                        Banner::TYPE_FEATURED => 'Featured',
+                        Banner::TYPE_SERVICE => 'Service',
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch banner configuration',
                 'error' => $e->getMessage(),
             ], 500);
         }

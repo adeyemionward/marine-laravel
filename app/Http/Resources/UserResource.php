@@ -23,6 +23,28 @@ class UserResource extends JsonResource
             'updated_at' => $this->updated_at,
             'profile' => new UserProfileResource($this->whenLoaded('profile')),
             'subscriptions' => $this->whenLoaded('subscriptions'),
+            'subscription' => $this->when(
+                $this->relationLoaded('subscriptions'),
+                function() {
+                    $activeSubscription = $this->subscriptions->where('status', 'active')
+                        ->where('expires_at', '>', now())
+                        ->first();
+
+                    if ($activeSubscription) {
+                        return [
+                            'id' => $activeSubscription->id,
+                            'plan_id' => $activeSubscription->plan_id,
+                            'plan_name' => $activeSubscription->plan ? $activeSubscription->plan->name : null,
+                            'status' => $activeSubscription->status,
+                            'started_at' => $activeSubscription->started_at,
+                            'expires_at' => $activeSubscription->expires_at,
+                            'auto_renew' => $activeSubscription->auto_renew,
+                        ];
+                    }
+
+                    return null;
+                }
+            ),
         ];
     }
 }

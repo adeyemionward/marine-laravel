@@ -17,12 +17,17 @@ use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\SellerController;
 use App\Http\Controllers\Api\CloudinaryController;
+use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\InquiryController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ConversationController;
 
 // Public routes
 Route::prefix('v1')->group(function () {
     // Authentication routes
     Route::post('/auth/register', [AuthController::class, 'register']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/login', [AuthController::class, 'login'])->name('login');
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
@@ -39,6 +44,20 @@ Route::prefix('v1')->group(function () {
 
     // Banners
     Route::get('/banners', [BannerController::class, 'index']);
+    Route::get('/banners/homepage', [BannerController::class, 'getHomepageBanners']);
+    Route::get('/banners/category', [BannerController::class, 'getCategoryBanners']);
+    Route::get('/banners/listing-detail', [BannerController::class, 'getListingDetailBanners']);
+    Route::get('/banners/configuration', [BannerController::class, 'getConfiguration']);
+    Route::post('/banners/{id}/click', [BannerController::class, 'trackClick']);
+    Route::post('/banners/{id}/impression', [BannerController::class, 'trackImpression']);
+
+    // Inquiries (public routes)
+    Route::post('/inquiries', [InquiryController::class, 'store']);
+    Route::get('/inquiries', [InquiryController::class, 'index']);
+
+    // Payment webhooks (public)
+    Route::post('/webhooks/flutterwave', [PaymentController::class, 'flutterwaveWebhook']);
+    Route::post('/webhooks/paystack', [PaymentController::class, 'paystackWebhook']);
 
     // Sellers (public routes)
     Route::get('/sellers', [SellerController::class, 'index']);
@@ -80,11 +99,15 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/equipment/{id}/analytics', [EquipmentController::class, 'analytics']);
 
     // Messaging
-    Route::get('/conversations', [MessageController::class, 'conversations']);
-    Route::get('/conversations/{id}', [MessageController::class, 'show']);
-    Route::post('/conversations', [MessageController::class, 'store']);
-    Route::post('/conversations/{id}/messages', [MessageController::class, 'sendMessage']);
-    Route::put('/messages/{id}/read', [MessageController::class, 'markAsRead']);
+    Route::get('/conversations', [ConversationController::class, 'index']);
+    Route::get('/conversations/{id}', [ConversationController::class, 'show']);
+    Route::post('/conversations', [ConversationController::class, 'createOrGet']);
+    Route::post('/conversations/{id}/messages', [ConversationController::class, 'sendMessage']);
+
+    // Notifications
+    Route::get('/notifications/summary', [NotificationController::class, 'summary']);
+    Route::get('/notifications/messages', [NotificationController::class, 'messages']);
+    Route::post('/notifications/mark-read', [NotificationController::class, 'markAsRead']);
 
     // Subscriptions
     Route::get('/subscription/plans', [SubscriptionController::class, 'plans']);
@@ -96,6 +119,25 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/seller/apply', [SellerController::class, 'apply']);
     Route::get('/seller/application-status', [SellerController::class, 'applicationStatus']);
     Route::get('/seller/dashboard', [SellerController::class, 'dashboard']);
+
+    // Order management
+    Route::prefix('orders')->group(function () {
+        Route::post('/', [OrderController::class, 'create']);
+        Route::get('/my-orders', [OrderController::class, 'getUserOrders']);
+        Route::get('/my-sales', [OrderController::class, 'getUserSales']);
+        Route::get('/{orderNumber}', [OrderController::class, 'show']);
+        Route::put('/{orderNumber}/status', [OrderController::class, 'updateStatus']);
+        Route::post('/{orderNumber}/cancel', [OrderController::class, 'cancel']);
+    });
+
+    // Payment management
+    Route::prefix('payments')->group(function () {
+        Route::post('/initialize', [PaymentController::class, 'initializePayment']);
+        Route::post('/verify', [PaymentController::class, 'verifyPayment']);
+        Route::get('/history', [PaymentController::class, 'getPaymentHistory']);
+        Route::get('/config', [PaymentController::class, 'getGatewayConfig']);
+        Route::get('/{reference}', [PaymentController::class, 'getPaymentDetails']);
+    });
 
     // User invoice management
     Route::prefix('user')->group(function () {
@@ -131,6 +173,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/listings/{id}/extend', [AdminController::class, 'extendListingExpiration']);
         Route::post('/listings/cleanup', [AdminController::class, 'runAutoCleanup']);
         Route::get('/listings/moderation/stats', [AdminController::class, 'getModerationStats']);
+        
+        // Priority and featured listing management
+        Route::put('/listings/{id}/priority', [AdminController::class, 'updateListingPriority']);
+        Route::put('/listings/{id}/featured', [AdminController::class, 'updateFeaturedStatus']);
+        Route::put('/listings/priority/bulk', [AdminController::class, 'bulkUpdatePriority']);
+        Route::get('/listings/priority/stats', [AdminController::class, 'getPriorityStatistics']);
+        Route::get('/listings/featured/stats', [AdminController::class, 'getFeaturedStatistics']);
 
         // User management
         Route::get('/users', [AdminController::class, 'users']);
@@ -202,6 +251,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/invoices/{id}', [AdminController::class, 'getInvoice']);
         Route::post('/invoices', [AdminController::class, 'createInvoice']);
         Route::post('/invoices/generate', [AdminController::class, 'generateSellerInvoice']);
+        Route::post('/invoices/generate-for-application', [AdminController::class, 'generateInvoiceForApplication']);
         Route::post('/invoices/{id}/send', [AdminController::class, 'sendSellerInvoice']);
         Route::get('/invoices/{id}/download', [AdminController::class, 'downloadInvoice']);
         Route::post('/invoices/{id}/approve-payment', [AdminController::class, 'approvePayment']);
@@ -213,5 +263,47 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/subscription-plans', [AdminController::class, 'createSubscriptionPlan']);
         Route::put('/subscription-plans/{id}', [AdminController::class, 'updateSubscriptionPlan']);
         Route::delete('/subscription-plans/{id}', [AdminController::class, 'deleteSubscriptionPlan']);
+
+        // Financial Management Routes
+        Route::prefix('financial')->group(function () {
+            Route::get('/stats', [\App\Http\Controllers\Api\FinancialController::class, 'getFinancialStats']);
+            Route::get('/transactions', [\App\Http\Controllers\Api\FinancialController::class, 'getTransactions']);
+            Route::get('/trends', [\App\Http\Controllers\Api\FinancialController::class, 'getMonthlyTrends']);
+            Route::get('/service-templates', [\App\Http\Controllers\Api\FinancialController::class, 'getServiceTemplates']);
+            Route::get('/revenue-breakdown', [\App\Http\Controllers\Api\FinancialController::class, 'getRevenueBreakdown']);
+            Route::post('/export-report', [\App\Http\Controllers\Api\FinancialController::class, 'exportReport']);
+        });
+
+        // Customer & Supplier Management Routes
+        Route::get('/customers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomers']);
+        Route::get('/customers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomerDetails']);
+        Route::post('/customers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'createOrUpdateCustomer']);
+        Route::put('/customers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'createOrUpdateCustomer']);
+        Route::get('/suppliers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getSuppliers']);
+        Route::get('/suppliers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getSupplierDetails']);
+        Route::post('/export-customers-suppliers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'exportData']);
+
+        // Admin Messaging Routes
+        Route::prefix('messages')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\AdminMessagingController::class, 'getAdminMessages']);
+            Route::post('/', [\App\Http\Controllers\Api\AdminMessagingController::class, 'sendAdminMessage']);
+            Route::post('/broadcast', [\App\Http\Controllers\Api\AdminMessagingController::class, 'sendBroadcast']);
+            Route::post('/mark-read', [\App\Http\Controllers\Api\AdminMessagingController::class, 'markAsRead']);
+            Route::delete('/', [\App\Http\Controllers\Api\AdminMessagingController::class, 'deleteMessages']);
+        });
+        Route::get('/conversations', [\App\Http\Controllers\Api\AdminMessagingController::class, 'getSystemConversations']);
+        Route::get('/email-queue', [\App\Http\Controllers\Api\AdminMessagingController::class, 'getEmailQueueStatus']);
+
+        // Category Management Admin Routes
+        Route::apiResource('categories', CategoryController::class);
+        Route::get('/categories/stats', [CategoryController::class, 'getStats']);
+
+        // System Status Endpoint
+        Route::get('/system/status', [AdminController::class, 'getSystemStatus']);
+
+        // Admin inquiry management
+        Route::get('/inquiries/{id}', [InquiryController::class, 'show']);
+        Route::put('/inquiries/{id}', [InquiryController::class, 'update']);
+        Route::get('/listings/{listingId}/inquiries', [InquiryController::class, 'getForListing']);
     });
 });

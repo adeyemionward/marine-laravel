@@ -344,6 +344,32 @@ class EquipmentController extends Controller
             // Increment view count
             $listing->incrementViewCount();
 
+            // Enhance seller data with additional information
+            if ($listing->seller) {
+                $seller = $listing->seller;
+                
+                // Get seller statistics
+                $sellerStats = [
+                    'totalListings' => EquipmentListing::where('seller_id', $seller->id)
+                        ->where('status', 'active')
+                        ->count(),
+                    'totalSales' => 0, // This would come from orders/sales data when implemented
+                    'responseTime' => '< 2 hours', // This would be calculated from message response times
+                    'joinedDate' => $seller->created_at->format('M Y'),
+                    'lastSeen' => $seller->last_login_at ? $seller->last_login_at->diffForHumans() : 'Recently'
+                ];
+                
+                // Add enhanced seller data
+                $listing->seller->stats = $sellerStats;
+                $listing->seller->isVerified = $seller->isVerified ?? false;
+                $listing->seller->businessType = $seller->business_type ?? 'Equipment Dealer';
+                $listing->seller->location = $seller->location_city && $seller->location_state 
+                    ? "{$seller->location_city}, {$seller->location_state}" 
+                    : ($seller->location_state ?? 'Nigeria');
+                $listing->seller->rating = $seller->rating ?? 4.5;
+                $listing->seller->reviewCount = $seller->review_count ?? 0;
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => $listing,

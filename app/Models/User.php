@@ -10,6 +10,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class User extends Authenticatable
 {
@@ -133,19 +134,26 @@ class User extends Authenticatable
     }
 
     /**
-     * Get user's subscriptions.
+     * Get user's subscriptions through profile.
      */
-    public function subscriptions(): HasMany
+    public function subscriptions(): HasManyThrough
     {
-        return $this->hasMany(Subscription::class);
+        return $this->hasManyThrough(
+            Subscription::class,
+            UserProfile::class,
+            'user_id', // Foreign key on UserProfile table
+            'user_id', // Foreign key on Subscription table
+            'id',      // Local key on User table
+            'id'       // Local key on UserProfile table
+        );
     }
 
     /**
      * Get user's subscription (for single subscription access).
      */
-    public function subscription(): HasMany
+    public function subscription()
     {
-        return $this->hasMany(Subscription::class);
+        return $this->subscriptions()->first();
     }
 
     /**
@@ -155,8 +163,7 @@ class User extends Authenticatable
     {
         return $this->subscriptions()
             ->with('plan')
-            ->where('status', 'active')
-            ->where('expires_at', '>', now())
+            ->active()
             ->first();
     }
 
@@ -166,5 +173,37 @@ class User extends Authenticatable
     public function listings(): HasMany
     {
         return $this->hasMany(EquipmentListing::class, 'seller_id');
+    }
+
+    /**
+     * Get user's orders as buyer.
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class, 'buyer_id');
+    }
+
+    /**
+     * Get user's sales as seller.
+     */
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Order::class, 'seller_id');
+    }
+
+    /**
+     * Get user's payments.
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Get user's invoices.
+     */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
     }
 }

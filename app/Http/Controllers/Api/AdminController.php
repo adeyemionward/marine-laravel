@@ -149,9 +149,9 @@ class AdminController extends Controller
                 $includes = ['profile']; // Always include profile
                 foreach ($validIncludes as $include) {
                     if ($include === 'subscription') {
-                        $includes[] = 'subscriptions'; // Map to actual relationship name
+                        $includes[] = 'subscriptions.plan'; // Map to actual relationship name with plan
                     } elseif ($include === 'subscriptions') {
-                        $includes[] = 'subscriptions';
+                        $includes[] = 'subscriptions.plan';
                     }
                     // Skip invoices as it doesn't exist on User model
                 }
@@ -812,15 +812,53 @@ class AdminController extends Controller
                 'welcome_message' => 'nullable|boolean',
                 'send_email' => 'nullable|boolean',
                 'grant_immediate_access' => 'nullable|boolean',
+                'auto_generate_invoice' => 'nullable|boolean',
+                'skip_invoice' => 'nullable|boolean',
             ]);
 
             $application = SellerApplication::findOrFail($validated['application_id']);
             $application->approve(auth()->user(), $validated['admin_notes'] ?? null);
 
-            return response()->json([
+            $response = [
                 'success' => true,
                 'message' => 'Seller application approved successfully',
-            ]);
+                'data' => [
+                    'application' => $application->fresh(['user', 'reviewer']),
+                ]
+            ];
+
+            // Check if we should generate invoice automatically
+            $autoGenerateInvoice = $validated['auto_generate_invoice'] ?? true; // Default to true
+            $skipInvoice = $validated['skip_invoice'] ?? false;
+            $grantImmediateAccess = $validated['grant_immediate_access'] ?? false;
+
+            if ($grantImmediateAccess || $skipInvoice) {
+                // Grant immediate access without invoice
+                $this->grantImmediateSellerAccess($application);
+                $response['message'] = 'Seller application approved with immediate access granted';
+                $response['data']['immediate_access'] = true;
+            } elseif ($autoGenerateInvoice) {
+                // Generate invoice automatically (default behavior)
+                $invoiceWorkflowService = app(\App\Services\InvoiceWorkflowService::class);
+                $invoice = $invoiceWorkflowService->generateSellerApprovalInvoice($application, auth()->user());
+                
+                $response['message'] = 'Seller application approved and invoice generated successfully';
+                $response['data']['invoice'] = [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'total_amount' => $invoice->total_amount,
+                    'due_date' => $invoice->due_date,
+                    'status' => $invoice->status,
+                ];
+                $response['data']['auto_invoice'] = true;
+            } else {
+                // Manual invoice generation (admin will create invoice later)
+                $response['message'] = 'Seller application approved. Manual invoice generation required.';
+                $response['data']['manual_invoice'] = true;
+            }
+
+            return response()->json($response);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -828,6 +866,181 @@ class AdminController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Grant immediate seller access without requiring payment
+     */
+    private function grantImmediateSellerAccess(SellerApplication $application): void
+    {
+        $user = $application->user;
+        
+        // Create active subscription without payment
+        $defaultPlan = \App\Models\SubscriptionPlan::where('tier', 'basic')
+            ->where('is_active', true)
+            ->first();
+
+        if ($defaultPlan) {
+            \App\Models\Subscription::create([
+                'user_id' => $user->id,
+                'plan_id' => $defaultPlan->id,
+                'status' => 'active',
+                'started_at' => now(),
+                'expires_at' => now()->addDays(30), // 30 days trial or full access
+                'auto_renew' => false, // Don't auto-renew for manually granted access
+            ]);
+        }
+
+        // Activate seller profile
+        if ($user->sellerProfile) {
+            $user->sellerProfile->update([
+                'verification_status' => 'active',
+                'verified_at' => now(),
+            ]);
+        }
+
+        // Update user status
+        $user->update(['status' => 'active']);
+    }
+
+    /**
+     * Manually generate invoice for approved seller application
+     */
+    public function generateInvoiceForApplication(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'application_id' => 'required|exists:seller_applications,id',
+                'plan_id' => 'nullable|exists:subscription_plans,id',
+                'custom_amount' => 'nullable|numeric|min:0',
+                'discount_amount' => 'nullable|numeric|min:0',
+                'due_date' => 'nullable|date|after:today',
+                'notes' => 'nullable|string|max:1000',
+                'send_email' => 'nullable|boolean',
+            ]);
+
+            $application = SellerApplication::with('user')->findOrFail($validated['application_id']);
+            
+            // Check if application is approved
+            if ($application->status !== 'approved') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Application must be approved before generating invoice',
+                ], 400);
+            }
+
+            // Check if invoice already exists for this application
+            $existingInvoice = Invoice::where('seller_application_id', $application->id)
+                ->where('status', '!=', 'cancelled')
+                ->first();
+
+            if ($existingInvoice) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invoice already exists for this application',
+                    'data' => ['existing_invoice_id' => $existingInvoice->id],
+                ], 400);
+            }
+
+            // Get subscription plan
+            $planId = $validated['plan_id'] ?? null;
+            $plan = null;
+            
+            if ($planId) {
+                $plan = SubscriptionPlan::findOrFail($planId);
+            } else {
+                $plan = SubscriptionPlan::where('tier', 'basic')
+                    ->where('is_active', true)
+                    ->first();
+            }
+
+            if (!$plan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No subscription plan found',
+                ], 400);
+            }
+
+            // Calculate amounts
+            $baseAmount = $validated['custom_amount'] ?? $plan->price;
+            $discountAmount = $validated['discount_amount'] ?? 0;
+            $taxRate = 7.5; // VAT in Nigeria
+            $discountedAmount = $baseAmount - $discountAmount;
+            $taxAmount = ($discountedAmount * $taxRate) / 100;
+            $totalAmount = $discountedAmount + $taxAmount;
+
+            // Create invoice
+            $invoice = Invoice::create([
+                'invoice_number' => Invoice::generateInvoiceNumber(),
+                'user_id' => $application->user_id,
+                'seller_application_id' => $application->id,
+                'plan_id' => $plan->id,
+                'amount' => $baseAmount,
+                'tax_amount' => $taxAmount,
+                'discount_amount' => $discountAmount,
+                'total_amount' => $totalAmount,
+                'status' => 'pending',
+                'invoice_type' => 'seller_subscription',
+                'tax_rate' => $taxRate,
+                'due_date' => $validated['due_date'] ? \Carbon\Carbon::parse($validated['due_date']) : now()->addDays(14),
+                'items' => [
+                    [
+                        'name' => $plan->name . ' Subscription',
+                        'description' => 'Monthly seller subscription - ' . $plan->description,
+                        'quantity' => 1,
+                        'unit_price' => $baseAmount,
+                        'discount' => $discountAmount,
+                        'total' => $discountedAmount
+                    ]
+                ],
+                'notes' => $validated['notes'] ?? 'Manual invoice generated by admin. Please complete payment to activate your seller account.',
+                'terms_and_conditions' => $this->getSellerTermsAndConditions(),
+                'company_name' => $application->business_name,
+                'generated_by' => auth()->id(),
+            ]);
+
+            // Send email if requested
+            if ($validated['send_email'] ?? false) {
+                // TODO: Send email notification
+                \Log::info('Manual invoice email sent', ['invoice_id' => $invoice->id]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Invoice generated successfully',
+                'data' => [
+                    'invoice' => [
+                        'id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'total_amount' => $invoice->total_amount,
+                        'due_date' => $invoice->due_date,
+                        'status' => $invoice->status,
+                    ],
+                    'application' => $application,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate invoice',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get seller terms and conditions
+     */
+    private function getSellerTermsAndConditions(): string
+    {
+        return "By paying this invoice, you agree to Marine.ng's seller terms and conditions:\n\n" .
+               "1. Monthly subscription fee is required to maintain active seller status\n" .
+               "2. Late payments may result in temporary suspension of seller privileges\n" .
+               "3. All listings must comply with Marine.ng quality standards\n" .
+               "4. Commission fees apply to completed transactions\n" .
+               "5. Subscription auto-renews unless cancelled\n\n" .
+               "For full terms, visit: https://marine.ng/seller-terms";
     }
 
     public function rejectSellerApplication(Request $request, $id): JsonResponse
@@ -2911,6 +3124,267 @@ class AdminController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to process payment approval',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get system status information
+     */
+    public function getSystemStatus(): JsonResponse
+    {
+        try {
+            // Check database connection
+            $dbStatus = true;
+            try {
+                DB::connection()->getPdo();
+            } catch (\Exception $e) {
+                $dbStatus = false;
+            }
+
+            // Check storage
+            $storageStatus = is_writable(storage_path());
+
+            // Check cache
+            $cacheStatus = true;
+            try {
+                cache()->put('test', 'test', 1);
+                cache()->forget('test');
+            } catch (\Exception $e) {
+                $cacheStatus = false;
+            }
+
+            // Get PHP version
+            $phpVersion = phpversion();
+
+            // Get Laravel version
+            $laravelVersion = app()->version();
+
+            // Get memory usage
+            $memoryUsage = round(memory_get_usage() / 1024 / 1024, 2) . ' MB';
+            $memoryPeak = round(memory_get_peak_usage() / 1024 / 1024, 2) . ' MB';
+
+            // Get disk space
+            $diskFree = round(disk_free_space('/') / 1024 / 1024 / 1024, 2) . ' GB';
+            $diskTotal = round(disk_total_space('/') / 1024 / 1024 / 1024, 2) . ' GB';
+
+            // Get uptime (if available)
+            $uptime = 'N/A';
+            if (PHP_OS_FAMILY === 'Linux') {
+                $uptime = trim(shell_exec("uptime -p"));
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'status' => 'operational',
+                    'services' => [
+                        'database' => $dbStatus ? 'operational' : 'down',
+                        'storage' => $storageStatus ? 'operational' : 'limited',
+                        'cache' => $cacheStatus ? 'operational' : 'down',
+                        'queue' => 'operational', // Placeholder
+                        'mail' => 'operational', // Placeholder
+                    ],
+                    'system' => [
+                        'php_version' => $phpVersion,
+                        'laravel_version' => $laravelVersion,
+                        'memory_usage' => $memoryUsage,
+                        'memory_peak' => $memoryPeak,
+                        'disk_free' => $diskFree,
+                        'disk_total' => $diskTotal,
+                        'uptime' => $uptime,
+                        'environment' => config('app.env'),
+                        'debug_mode' => config('app.debug'),
+                        'timezone' => config('app.timezone'),
+                    ],
+                    'timestamp' => now()->toIso8601String()
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get system status',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Update listing priority
+     */
+    public function updateListingPriority(Request $request, $listingId): JsonResponse
+    {
+        try {
+            $request->validate([
+                'priority' => 'required|integer|min:0|max:100'
+            ]);
+
+            $listing = EquipmentListing::findOrFail($listingId);
+            $listing->priority = $request->priority;
+            $listing->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Listing priority updated successfully',
+                'data' => [
+                    'id' => $listing->id,
+                    'priority' => $listing->priority,
+                    'title' => $listing->title
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update listing priority',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Update featured status
+     */
+    public function updateFeaturedStatus(Request $request, $listingId): JsonResponse
+    {
+        try {
+            $request->validate([
+                'is_featured' => 'required|boolean',
+                'reason' => 'nullable|string|max:500'
+            ]);
+
+            $listing = EquipmentListing::findOrFail($listingId);
+            $listing->is_featured = $request->is_featured;
+            
+            // Set featured until date if featuring
+            if ($request->is_featured) {
+                $listing->featured_until = now()->addDays(30); // Default 30 days
+            } else {
+                $listing->featured_until = null;
+            }
+            
+            $listing->save();
+
+            // Log the action for audit trail
+            \Log::info('Admin featured status change', [
+                'admin_id' => auth()->id(),
+                'listing_id' => $listingId,
+                'is_featured' => $request->is_featured,
+                'reason' => $request->reason
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $request->is_featured ? 'Listing featured successfully' : 'Featured status removed successfully',
+                'data' => [
+                    'id' => $listing->id,
+                    'is_featured' => $listing->is_featured,
+                    'featured_until' => $listing->featured_until,
+                    'title' => $listing->title
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update featured status',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Bulk update listing priorities
+     */
+    public function bulkUpdatePriority(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'listing_ids' => 'required|array|min:1',
+                'listing_ids.*' => 'integer|exists:equipment_listings,id',
+                'priority' => 'required|integer|min:0|max:100'
+            ]);
+
+            $updated = EquipmentListing::whereIn('id', $request->listing_ids)
+                ->update(['priority' => $request->priority]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Updated priority for {$updated} listings",
+                'data' => [
+                    'updated_count' => $updated,
+                    'priority' => $request->priority
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to bulk update priorities',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get priority statistics
+     */
+    public function getPriorityStatistics(): JsonResponse
+    {
+        try {
+            $stats = [
+                'critical' => EquipmentListing::where('priority', '>=', 90)->count(),
+                'high' => EquipmentListing::whereBetween('priority', [70, 89])->count(),
+                'medium' => EquipmentListing::whereBetween('priority', [40, 69])->count(),
+                'low' => EquipmentListing::whereBetween('priority', [1, 39])->count(),
+                'normal' => EquipmentListing::where('priority', 0)->orWhereNull('priority')->count(),
+                'total_with_priority' => EquipmentListing::where('priority', '>', 0)->count(),
+                'total_listings' => EquipmentListing::count()
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch priority statistics',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get featured statistics
+     */
+    public function getFeaturedStatistics(): JsonResponse
+    {
+        try {
+            $stats = [
+                'total_featured' => EquipmentListing::where('is_featured', true)->count(),
+                'active_featured' => EquipmentListing::where('is_featured', true)
+                    ->where('status', 'active')
+                    ->count(),
+                'featured_by_category' => EquipmentListing::where('is_featured', true)
+                    ->with('category')
+                    ->get()
+                    ->groupBy('category.name')
+                    ->map(function ($items) {
+                        return $items->count();
+                    }),
+                'expiring_soon' => EquipmentListing::where('is_featured', true)
+                    ->where('featured_until', '<=', now()->addDays(7))
+                    ->count(),
+                'total_listings' => EquipmentListing::count()
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch featured statistics',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }

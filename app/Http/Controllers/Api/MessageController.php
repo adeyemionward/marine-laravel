@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Events\MessageSent;
+use App\Events\UserTyping;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -180,6 +182,9 @@ class MessageController extends Controller
 
             $conversation->touch(); // Update conversation timestamp
 
+            // Broadcast the message to real-time listeners
+            broadcast(new MessageSent($message))->toOthers();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Conversation started successfully',
@@ -219,6 +224,9 @@ class MessageController extends Controller
 
             $conversation->touch(); // Update conversation timestamp
 
+            // Broadcast the message to real-time listeners
+            broadcast(new MessageSent($message))->toOthers();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Message sent successfully',
@@ -254,6 +262,38 @@ class MessageController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to mark message as read',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function typing(Request $request, $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'is_typing' => 'required|boolean',
+            ]);
+
+            $userId = Auth::user()->profile->id;
+            
+            $conversation = Conversation::where(function ($query) use ($userId) {
+                $query->where('buyer_id', $userId)
+                      ->orWhere('seller_id', $userId);
+            })->findOrFail($id);
+
+            $user = Auth::user()->profile;
+            
+            // Broadcast typing status to other participants
+            broadcast(new UserTyping($user, $conversation->id, $validated['is_typing']))->toOthers();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Typing status updated',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update typing status',
                 'error' => $e->getMessage(),
             ], 500);
         }
