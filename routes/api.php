@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\SellerController;
 use App\Http\Controllers\Api\CloudinaryController;
+use App\Http\Controllers\Api\Communication\NewsLetterController;
+use App\Http\Controllers\Api\Communication\NewsLetterTemplateController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\InquiryController;
@@ -166,14 +168,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/listings/{id}/approve', [AdminController::class, 'approveListing']);
         Route::post('/listings/{id}/reject', [AdminController::class, 'rejectListing']);
         Route::post('/listings/{id}/feature', [AdminController::class, 'featureListing']);
-        
+
         // Listing moderation
         Route::get('/listings/moderation', [AdminController::class, 'getListingsForModeration']);
         Route::post('/listings/{id}/moderate', [AdminController::class, 'moderateListing']);
         Route::post('/listings/{id}/extend', [AdminController::class, 'extendListingExpiration']);
         Route::post('/listings/cleanup', [AdminController::class, 'runAutoCleanup']);
         Route::get('/listings/moderation/stats', [AdminController::class, 'getModerationStats']);
-        
+
         // Priority and featured listing management
         Route::put('/listings/{id}/priority', [AdminController::class, 'updateListingPriority']);
         Route::put('/listings/{id}/featured', [AdminController::class, 'updateFeaturedStatus']);
@@ -205,11 +207,11 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::put('/users/{id}/status', [AdminController::class, 'updateUserStatus']);
         Route::put('/users/{id}/role', [AdminController::class, 'updateUserRole']);
         Route::post('/users/{id}/promote-to-seller', [AdminController::class, 'promoteToSeller']);
-        
+
         // Email Verification
         Route::post('/email/verification', [AdminController::class, 'createEmailVerification']);
         Route::post('/email/verify-code', [AdminController::class, 'verifyEmailCode']);
-        
+
         // User subscription management
         Route::post('/users/{id}/subscription', [AdminController::class, 'createUserSubscription']);
         Route::put('/users/{id}/subscription/upgrade', [AdminController::class, 'upgradeUserSubscription']);
@@ -233,7 +235,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/analytics/listings', [AdminController::class, 'listingAnalytics']);
         Route::get('/analytics/users', [AdminController::class, 'userAnalytics']);
         Route::get('/dashboard/analytics', [AdminController::class, 'dashboardAnalytics']);
-        
+
         // System Metrics
         Route::get('/system/metrics', [AdminController::class, 'getSystemMetrics']);
 
@@ -305,5 +307,35 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/inquiries/{id}', [InquiryController::class, 'show']);
         Route::put('/inquiries/{id}', [InquiryController::class, 'update']);
         Route::get('/listings/{listingId}/inquiries', [InquiryController::class, 'getForListing']);
+
+
+        // Communication Managment
+        Route::group(['prefix' => '/communication', 'as' => 'communication.'], function () {
+            Route::group(['prefix' => '/newsletters', 'as' => 'newsletters.'], function () {
+                Route::get('/', [NewsLetterController::class, 'index']);
+                Route::post('/store', [NewsLetterController::class, 'store']);
+                Route::get('/show/{id}', [NewsLetterController::class, 'show']);
+                Route::put('/update/{id}', [NewsLetterController::class, 'update']);
+                Route::delete('/delete/{id}', [NewsLetterController::class, 'destroy']);
+            });
+
+            Route::group(['prefix' => '/newsletter-templates', 'as' => 'newsletter-templates.'], function () {
+                Route::get('/', [NewsLetterTemplateController::class, 'index']);
+                Route::post('/store', [NewsLetterTemplateController::class, 'store']);
+                Route::get('/show/{id}', [NewsLetterTemplateController::class, 'show']);
+                Route::put('/update/{id}', [NewsLetterTemplateController::class, 'update']);
+                Route::delete('/delete/{id}', [NewsLetterTemplateController::class, 'destroy']);
+            });
+        });
+
+        Route::group(['prefix' => '/email-config', 'as' => 'email-config.'], function () {
+            Route::group(['prefix' => '/newsletters', 'as' => 'newsletters.'], function () {
+                Route::get('/', [NewsLetterController::class, 'index']);
+                Route::post('/store', [NewsLetterController::class, 'store']);
+                Route::get('/show/{id}', [NewsLetterController::class, 'show']);
+                Route::put('/update/{id}', [NewsLetterController::class, 'update']);
+                Route::delete('/delete/{id}', [NewsLetterController::class, 'destroy']);
+            });
+        });
     });
 });
