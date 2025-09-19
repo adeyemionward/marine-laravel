@@ -15,7 +15,7 @@ class EmailConfigController extends Controller
 
     public function index()
     {
-        $config = EmailConfig::first();
+        $config = EmailConfig::all();
         return response()->json($config);
     }
 
@@ -37,7 +37,9 @@ class EmailConfigController extends Controller
         $validated['password'] = Crypt::encryptString($validated['password']);
 
         // only one config allowed, so upsert
-        $config = EmailConfig::updateOrCreate(['id' => 1], $validated);
+        $config = EmailConfig::updateOrCreate(
+            ['driver' => $validated['driver']]
+            , $validated);
 
         return response()->json([
             'message' => 'Email configuration saved successfully',
@@ -50,7 +52,7 @@ class EmailConfigController extends Controller
         $config = EmailConfig::where('driver', $driver)->first();
 
         if (!$config) {
-            return response()->json(['message' => "No configuration found for driver: $driver"], 404);
+            return response()->json(['message' => "No configuration found for driver: $driver"], 200);
         }
 
         return response()->json($config);

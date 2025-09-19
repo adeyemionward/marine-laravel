@@ -33,5 +33,26 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e) {
+            return response()->json([
+                'message' => 'Endpoint not found',
+                'status' => 404
+            ], 404);
+        });
+
+        // Handle wrong HTTP method (GET instead of POST, etc.)
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException $e) {
+            return response()->json([
+                'message' => 'HTTP method not allowed for this endpoint',
+                'status' => 405
+            ], 405);
+        });
+
+        // Handle all other errors
+        $exceptions->render(function (Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage() ?: 'Server error occurred',
+                'status' => 500
+            ], 500);
+        });
     })->create();

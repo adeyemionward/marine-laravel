@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('from_email');
             $table->string('from_name')->nullable();
             $table->string('encryption')->default('tls'); // tls, ssl, null
-            $table->boolean('enable_smtp')->default(true);
+            $table->boolean('enable_smtp')->default(false);
             $table->timestamps();
         });
     }

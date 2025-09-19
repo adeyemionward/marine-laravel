@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\SellerController;
 use App\Http\Controllers\Api\CloudinaryController;
+use App\Http\Controllers\Api\Communication\EmailConfigController;
 use App\Http\Controllers\Api\Communication\NewsLetterController;
 use App\Http\Controllers\Api\Communication\NewsLetterTemplateController;
 use App\Http\Controllers\Api\OrderController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\InquiryController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Models\EmailConfig;
 
 // Public routes
 Route::prefix('v1')->group(function () {
@@ -326,15 +328,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::put('/update/{id}', [NewsLetterTemplateController::class, 'update']);
                 Route::delete('/delete/{id}', [NewsLetterTemplateController::class, 'destroy']);
             });
-        });
 
-        Route::group(['prefix' => '/email-config', 'as' => 'email-config.'], function () {
-            Route::group(['prefix' => '/newsletters', 'as' => 'newsletters.'], function () {
-                Route::get('/', [NewsLetterController::class, 'index']);
-                Route::post('/store', [NewsLetterController::class, 'store']);
-                Route::get('/show/{id}', [NewsLetterController::class, 'show']);
-                Route::put('/update/{id}', [NewsLetterController::class, 'update']);
-                Route::delete('/delete/{id}', [NewsLetterController::class, 'destroy']);
+            Route::group(['prefix' => '/email-configs', 'as' => 'email-configs.'], function () {
+                Route::get('/', [EmailConfigController::class, 'index']);
+                Route::post('/store', [EmailConfigController::class, 'store']);
+                Route::get('/show/{id}', [EmailConfigController::class, 'show']);
+                Route::post('/test/{id}', [EmailConfigController::class, 'test']);
             });
         });
     });
