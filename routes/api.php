@@ -7,6 +7,42 @@ use Illuminate\Support\Facades\Route;
 Route::get('/test', function () {
     return response()->json(['message' => 'API routes working', 'timestamp' => now()]);
 });
+
+// Debug conversations route
+Route::get('/debug-conversations', function () {
+    $conversations = \App\Models\Conversation::select('id', 'type', 'title', 'status', 'created_at')->get();
+    return response()->json([
+        'total_conversations' => $conversations->count(),
+        'conversations' => $conversations,
+        'types' => $conversations->pluck('type')->unique()->values()
+    ]);
+});
+
+// Test admin conversations without auth
+Route::get('/test-admin-conversations', function () {
+    $query = \App\Models\Conversation::with(['participants', 'messages' => function($q) {
+        $q->latest()->limit(1);
+    }]);
+
+    $conversations = $query->withCount('messages')
+    ->orderBy('updated_at', 'desc')
+    ->paginate(20);
+
+    return response()->json([
+        'success' => true,
+        'data' => $conversations
+    ]);
+});
+
+// Check messages table structure
+Route::get('/debug-messages', function () {
+    $messages = \App\Models\Message::first();
+    return response()->json([
+        'sample_message' => $messages,
+        'message_attributes' => $messages ? array_keys($messages->getAttributes()) : [],
+        'total_messages' => \App\Models\Message::count()
+    ]);
+});
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
@@ -25,10 +61,21 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\InquiryController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\KnowledgeBaseController;
 use App\Models\EmailConfig;
 
 // Public routes
 Route::prefix('v1')->group(function () {
+    // Health check endpoint
+    Route::get('/health', function () {
+        return response()->json([
+            'status' => 'ok',
+            'message' => 'API is healthy',
+            'timestamp' => now(),
+            'version' => '1.0.0'
+        ]);
+    });
+
     // Authentication routes
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login'])->name('login');
@@ -72,6 +119,17 @@ Route::prefix('v1')->group(function () {
     Route::get('/sellers/{id}/reviews', [SellerController::class, 'reviews']);
     Route::get('/seller/specialties', [SellerController::class, 'specialties']);
 
+    // Knowledge Base (public routes)
+    Route::get('/knowledge-base', [KnowledgeBaseController::class, 'index']);
+    Route::get('/knowledge-base/categories', [KnowledgeBaseController::class, 'categories']);
+    Route::get('/knowledge-base/featured', [KnowledgeBaseController::class, 'featured']);
+    Route::get('/knowledge-base/popular', [KnowledgeBaseController::class, 'popular']);
+    Route::get('/knowledge-base/search', [KnowledgeBaseController::class, 'search']);
+    Route::get('/knowledge-base/slug/{slug}', [KnowledgeBaseController::class, 'getBySlug']);
+    Route::get('/knowledge-base/{id}', [KnowledgeBaseController::class, 'show']);
+    Route::get('/knowledge-base/{id}/related', [KnowledgeBaseController::class, 'getRelated']);
+    Route::post('/knowledge-base/{id}/view', [KnowledgeBaseController::class, 'trackView']);
+
     // System settings (public ones)
     Route::get('/system/settings', [AdminController::class, 'publicSettings']);
 });
@@ -107,6 +165,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/conversations/{id}', [ConversationController::class, 'show']);
     Route::post('/conversations', [ConversationController::class, 'createOrGet']);
     Route::post('/conversations/{id}/messages', [ConversationController::class, 'sendMessage']);
+    Route::put('/conversations/{id}/read', [ConversationController::class, 'markAsRead']);
+    Route::put('/conversations/{id}/archive', [ConversationController::class, 'archive']);
+    Route::get('/messages/unread-count', [ConversationController::class, 'getUnreadCount']);
 
     // Notifications
     Route::get('/notifications/summary', [NotificationController::class, 'summary']);

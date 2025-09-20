@@ -16,11 +16,19 @@ class Conversation extends Model
         'listing_id',
         'buyer_id',
         'seller_id',
+        'subject',
+        'type',
+        'title',
+        'metadata',
+        'status',
+        'is_active',
         'last_message_at',
     ];
 
     protected $casts = [
         'last_message_at' => 'datetime',
+        'metadata' => 'array',
+        'is_active' => 'boolean',
     ];
 
     public function listing(): BelongsTo
@@ -65,7 +73,7 @@ class Conversation extends Model
     {
         return $this->messages()
             ->where('sender_id', '!=', $currentUserId)
-            ->where('is_read', false)
+            ->whereNull('read_at')
             ->count();
     }
 
@@ -73,7 +81,7 @@ class Conversation extends Model
     {
         $this->messages()
             ->where('sender_id', '!=', $currentUserId)
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
     }
 }
