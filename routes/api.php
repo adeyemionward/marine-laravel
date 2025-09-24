@@ -25,6 +25,8 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\InquiryController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\Settings\BackupManagementController;
+use App\Http\Controllers\Api\Settings\DatabaseMaintenanceController;
 use App\Models\EmailConfig;
 
 // Public routes
@@ -336,5 +338,34 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::post('/test/{id}', [EmailConfigController::class, 'test']);
             });
         });
+
+         // System Settings
+        Route::group(['prefix' => '/settings', 'as' => 'settings.'], function () {
+            Route::group(['prefix' => '/backups', 'as' => 'backups.'], function () {
+                Route::get('/getBackups', [BackupManagementController::class, 'getBackups']);
+                Route::post('/createBackup', [BackupManagementController::class, 'createBackup']);
+                Route::get('/listTables', [BackupManagementController::class, 'listTables']);
+                Route::delete('/deleteBackup/{id}', [BackupManagementController::class, 'deleteBackup']);
+            });
+
+            Route::group(['prefix' => '/database', 'as' => 'database'], function () {
+                Route::get('/systemHealthOverview', [DatabaseMaintenanceController::class, 'systemHealthOverview']);
+                Route::get('/getMaintenanceLogs', [DatabaseMaintenanceController::class, 'getMaintenanceLogs']);
+                Route::get('/optimizeDatabase', [DatabaseMaintenanceController::class, 'optimizeDatabase']);
+                Route::get('/cleanupExpiredBanners', [DatabaseMaintenanceController::class, 'cleanupExpiredBanners']);
+                Route::get('/refreshMetrics', [DatabaseMaintenanceController::class, 'refreshMetrics']);
+                Route::get('/cleanupDatabase', [DatabaseMaintenanceController::class, 'cleanupDatabase']);
+                Route::get('/rebuildIndexes', [DatabaseMaintenanceController::class, 'rebuildIndexes']);
+            });
+
+            Route::group(['prefix' => '/email-configs', 'as' => 'email-configs.'], function () {
+                Route::get('/', [EmailConfigController::class, 'index']);
+                Route::post('/store', [EmailConfigController::class, 'store']);
+                Route::get('/show/{id}', [EmailConfigController::class, 'show']);
+                Route::post('/test/{id}', [EmailConfigController::class, 'test']);
+            });
+        });
+
+
     });
 });
