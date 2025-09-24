@@ -29,7 +29,11 @@ class AdminMessagingController extends Controller
 
             // Apply filters
             if ($request->has('status')) {
-                $query->where('is_read', $request->status === 'read');
+                if ($request->status === 'read') {
+                    $query->whereNotNull('read_at');
+                } else {
+                    $query->whereNull('read_at');
+                }
             }
 
             if ($request->has('search')) {
@@ -144,10 +148,19 @@ class AdminMessagingController extends Controller
     public function getSystemConversations(Request $request): JsonResponse
     {
         try {
-            $query = Conversation::with(['participants', 'messages' => function($q) {
+            $query = Conversation::with(['buyer', 'seller', 'listing', 'messages' => function($q) {
                 $q->latest()->limit(1);
-            }])
-            ->whereIn('type', ['admin', 'system', 'support']);
+            }]);
+
+            // Filter by type if specified, otherwise show all conversations
+            if ($request->has('type')) {
+                $types = is_array($request->type) ? $request->type : [$request->type];
+                $query->whereIn('type', $types);
+            } else {
+                // By default, show all conversation types for admin overview
+                // You can uncomment the line below to only show admin-related conversations
+                // $query->whereIn('type', ['admin', 'system', 'support']);
+            }
 
             // Apply filters
             if ($request->has('status')) {
@@ -158,16 +171,19 @@ class AdminMessagingController extends Controller
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
                     $q->where('title', 'like', "%{$search}%")
-                      ->orWhereHas('participants', function($q) use ($search) {
-                          $q->where('name', 'like', "%{$search}%");
+                      ->orWhere('subject', 'like', "%{$search}%")
+                      ->orWhereHas('buyer', function($q) use ($search) {
+                          $q->where('full_name', 'like', "%{$search}%");
+                      })
+                      ->orWhereHas('seller', function($q) use ($search) {
+                          $q->where('full_name', 'like', "%{$search}%");
                       });
                 });
             }
 
-            // Get unread count for each conversation
+            // Get unread count for each conversation (remove Auth::id() check for now since this is for admin)
             $conversations = $query->withCount(['messages as unread_count' => function($q) {
-                $q->where('is_read', false)
-                  ->where('sender_id', '!=', Auth::id());
+                $q->whereNull('read_at');
             }])
             ->orderBy('updated_at', 'desc')
             ->paginate($request->get('per_page', 20));
@@ -328,7 +344,7 @@ class AdminMessagingController extends Controller
             ]);
 
             Message::whereIn('id', $validated['message_ids'])
-                ->update(['is_read' => true]);
+                ->update(['read_at' => now()]);
 
             return response()->json([
                 'success' => true,

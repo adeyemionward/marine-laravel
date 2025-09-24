@@ -14,13 +14,20 @@ class Message extends Model
         'conversation_id',
         'sender_id',
         'content',
-        'is_read',
+        'type',
+        'status',
+        'attachments',
+        'offer_price',
+        'offer_currency',
+        'is_system',
         'read_at',
     ];
 
     protected $casts = [
-        'is_read' => 'boolean',
         'read_at' => 'datetime',
+        'attachments' => 'array',
+        'offer_price' => 'decimal:2',
+        'is_system' => 'boolean',
     ];
 
     public function conversation(): BelongsTo
@@ -35,7 +42,7 @@ class Message extends Model
 
     public function scopeUnread($query)
     {
-        return $query->where('is_read', false);
+        return $query->whereNull('read_at');
     }
 
     public function scopeForSender($query, $senderId)
@@ -50,9 +57,8 @@ class Message extends Model
 
     public function markAsRead(): void
     {
-        if (!$this->is_read) {
+        if (!$this->read_at) {
             $this->update([
-                'is_read' => true,
                 'read_at' => now(),
             ]);
         }

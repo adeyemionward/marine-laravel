@@ -69,11 +69,31 @@ class EquipmentListingResource extends JsonResource
                 ];
             }),
             'seller' => $this->whenLoaded('seller', function () {
+                $seller = $this->seller;
+                $profile = $seller->profile;
+                $sellerProfile = $seller->sellerProfile;
+
                 return [
-                    'id' => $this->seller->id,
-                    'full_name' => $this->seller->full_name,
-                    'company_name' => $this->seller->company_name,
-                    'is_verified' => $this->seller->is_verified,
+                    'id' => $seller->id,
+                    'name' => $profile?->full_name ?? $seller->name,
+                    'full_name' => $profile?->full_name ?? $seller->name,
+                    'company_name' => $profile?->company_name,
+                    'businessType' => $sellerProfile?->business_name ?? $profile?->company_name,
+                    'avatar' => $profile?->avatar_url,
+                    'phone' => $profile?->phone,
+                    'email' => $seller->email,
+                    'location' => $sellerProfile?->location ?? ($profile ? "{$profile->city}, {$profile->state}" : null),
+                    'isVerified' => $profile?->is_verified || $sellerProfile?->isVerified() || false,
+                    'verification_status' => $sellerProfile?->verification_status ?? 'pending',
+                    'rating' => $sellerProfile?->rating ?? 0,
+                    'reviewCount' => $sellerProfile?->review_count ?? 0,
+                    'stats' => [
+                        'totalListings' => $sellerProfile?->total_listings ?? $seller->listings()->where('status', 'active')->count(),
+                        'totalSales' => $seller->sales()->where('status', 'completed')->count(),
+                        'responseTime' => $sellerProfile?->response_time ?? 'N/A',
+                        'joinedDate' => $seller->created_at?->format('M Y'),
+                        'lastSeen' => $seller->updated_at?->diffForHumans(),
+                    ],
                 ];
             }),
         ];

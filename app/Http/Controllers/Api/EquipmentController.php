@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\EquipmentListing;
+use App\Http\Resources\EquipmentListingResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,7 +17,7 @@ class EquipmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = EquipmentListing::with(['seller', 'category'])
+            $query = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
                 ->notExpired();
@@ -82,7 +83,7 @@ class EquipmentController extends Controller
                 
                 return response()->json([
                     'success' => true,
-                    'data' => $equipment,
+                    'data' => EquipmentListingResource::collection($equipment),
                 ]);
             } else {
                 // Standard pagination
@@ -92,7 +93,7 @@ class EquipmentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $equipment->items(),
+                'data' => EquipmentListingResource::collection($equipment->items()),
                 'meta' => [
                     'current_page' => $equipment->currentPage(),
                     'per_page' => $equipment->perPage(),
@@ -117,8 +118,8 @@ class EquipmentController extends Controller
     {
         try {
             $limit = min(20, max(1, (int) $request->get('limit', 12)));
-            
-            $equipment = EquipmentListing::with(['seller', 'category'])
+
+            $equipment = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
                 ->notExpired()
@@ -129,7 +130,7 @@ class EquipmentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $equipment,
+                'data' => EquipmentListingResource::collection($equipment),
                 'meta' => [
                     'count' => $equipment->count(),
                     'limit' => $limit,
@@ -152,7 +153,7 @@ class EquipmentController extends Controller
         try {
             $limit = min(20, max(1, (int) $request->get('limit', 12)));
             
-            $equipment = EquipmentListing::with(['seller', 'category'])
+            $equipment = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
                 ->notExpired()
@@ -193,7 +194,7 @@ class EquipmentController extends Controller
             $query = $request->get('q');
             $perPage = min(50, max(1, (int) $request->get('per_page', 12)));
             
-            $equipment = EquipmentListing::with(['seller', 'category'])
+            $equipment = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
                 ->notExpired()
@@ -335,7 +336,7 @@ class EquipmentController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $listing = EquipmentListing::with(['seller', 'category'])
+            $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
                 ->notExpired()
@@ -344,35 +345,9 @@ class EquipmentController extends Controller
             // Increment view count
             $listing->incrementViewCount();
 
-            // Enhance seller data with additional information
-            if ($listing->seller) {
-                $seller = $listing->seller;
-                
-                // Get seller statistics
-                $sellerStats = [
-                    'totalListings' => EquipmentListing::where('seller_id', $seller->id)
-                        ->where('status', 'active')
-                        ->count(),
-                    'totalSales' => 0, // This would come from orders/sales data when implemented
-                    'responseTime' => '< 2 hours', // This would be calculated from message response times
-                    'joinedDate' => $seller->created_at->format('M Y'),
-                    'lastSeen' => $seller->last_login_at ? $seller->last_login_at->diffForHumans() : 'Recently'
-                ];
-                
-                // Add enhanced seller data
-                $listing->seller->stats = $sellerStats;
-                $listing->seller->isVerified = $seller->isVerified ?? false;
-                $listing->seller->businessType = $seller->business_type ?? 'Equipment Dealer';
-                $listing->seller->location = $seller->location_city && $seller->location_state 
-                    ? "{$seller->location_city}, {$seller->location_state}" 
-                    : ($seller->location_state ?? 'Nigeria');
-                $listing->seller->rating = $seller->rating ?? 4.5;
-                $listing->seller->reviewCount = $seller->review_count ?? 0;
-            }
-
             return response()->json([
                 'success' => true,
-                'data' => $listing,
+                'data' => new EquipmentListingResource($listing),
             ]);
         } catch (\Exception $e) {
             return response()->json([
