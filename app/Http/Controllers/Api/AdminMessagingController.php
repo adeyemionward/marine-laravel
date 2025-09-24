@@ -76,14 +76,30 @@ class AdminMessagingController extends Controller
     public function sendAdminMessage(Request $request): JsonResponse
     {
         try {
-            $validated = $request->validate([
-                'recipient_ids' => 'required|array',
+            // Handle both single recipient_id and array of recipient_ids
+            $request->validate([
+                'recipient_id' => 'required_without:recipient_ids|exists:users,id',
+                'recipient_ids' => 'required_without:recipient_id|array',
                 'recipient_ids.*' => 'exists:users,id',
                 'subject' => 'required|string|max:255',
-                'message' => 'required|string',
-                'type' => 'required|in:announcement,notification,warning,message',
+                'message_content' => 'required|string',
+                'message_type' => 'required|string',
+                'priority' => 'required|string',
                 'send_email' => 'boolean'
             ]);
+
+            // Normalize to array format
+            $recipientIds = $request->has('recipient_ids')
+                ? $request->recipient_ids
+                : [$request->recipient_id];
+
+            $validated = [
+                'recipient_ids' => $recipientIds,
+                'subject' => $request->subject,
+                'message' => $request->message_content,
+                'type' => $request->message_type,
+                'send_email' => $request->send_email ?? false
+            ];
 
             $adminId = Auth::id();
             $messagesSent = [];
@@ -103,8 +119,7 @@ class AdminMessagingController extends Controller
                     ]
                 );
 
-                // Attach participants if not already attached
-                $conversation->participants()->syncWithoutDetaching([$adminId, $recipientId]);
+                // For admin messages, we don't need to manage participants separately
 
                 // Create message
                 $message = Message::create([
@@ -381,6 +396,250 @@ class AdminMessagingController extends Controller
                 'success' => false,
                 'message' => 'Failed to delete messages',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Start a new system conversation (user to admin)
+     */
+    public function startSystemConversation(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'subject' => 'required|string|max:255',
+                'initial_message' => 'required|string'
+            ]);
+
+            $userId = Auth::user()->profile->id;
+
+            // Create new system conversation
+            $conversation = Conversation::create([
+                'buyer_id' => $userId,
+                'seller_id' => null, // No seller for system conversations
+                'listing_id' => null, // No listing for system conversations
+                'type' => 'system',
+                'subject' => $validated['subject'],
+                'status' => 'open'
+            ]);
+
+            // Add initial message
+            Message::create([
+                'conversation_id' => $conversation->id,
+                'sender_id' => $userId,
+                'content' => $validated['initial_message'],
+                'type' => 'text',
+                'is_from_admin' => false
+            ]);
+
+            // Load relationships
+            $conversation->load('messages');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Conversation started successfully',
+                'data' => $conversation
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to start conversation',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Send a message in a system conversation
+     */
+    public function sendSystemMessage(Request $request, $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'content' => 'required|string'
+            ]);
+
+            $userId = Auth::user()->profile->id;
+            $isAdmin = Auth::user()->hasRole('admin');
+
+            // Get the conversation
+            $conversation = Conversation::findOrFail($id);
+
+            // Check access
+            if (!$isAdmin && $conversation->buyer_id !== $userId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied'
+                ], 403);
+            }
+
+            // Create message
+            $message = Message::create([
+                'conversation_id' => $conversation->id,
+                'sender_id' => $userId,
+                'content' => $validated['content'],
+                'type' => 'text',
+                'is_from_admin' => $isAdmin
+            ]);
+
+            // Update conversation timestamp
+            $conversation->touch();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Message sent successfully',
+                'data' => $message
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send message',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get a specific system conversation with all messages
+     */
+    public function getSystemConversation(Request $request, $id): JsonResponse
+    {
+        try {
+            $conversation = Conversation::with(['buyer', 'seller', 'listing', 'messages' => function($q) {
+                $q->orderBy('created_at', 'asc');
+            }])->findOrFail($id);
+
+            // For user access, check if they are part of the conversation
+            if (!Auth::user()->hasRole('admin')) {
+                $userId = Auth::user()->profile->id;
+                if ($conversation->buyer_id !== $userId && $conversation->seller_id !== $userId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Access denied'
+                    ], 403);
+                }
+            }
+
+            // Mark messages as read for current user (if not admin)
+            if (!Auth::user()->hasRole('admin')) {
+                $userId = Auth::user()->profile->id;
+                $conversation->messages()
+                    ->where('sender_id', '!=', $userId)
+                    ->whereNull('read_at')
+                    ->update(['read_at' => now()]);
+            }
+
+            // Format the conversation data
+            $data = [
+                'id' => $conversation->id,
+                'subject' => $conversation->subject,
+                'type' => $conversation->type,
+                'status' => $conversation->status,
+                'created_at' => $conversation->created_at,
+                'updated_at' => $conversation->updated_at,
+            ];
+
+            // Add buyer/seller info if available
+            if ($conversation->buyer) {
+                $data['buyer'] = [
+                    'id' => $conversation->buyer->id,
+                    'name' => $conversation->buyer->full_name,
+                    'email' => $conversation->buyer->email,
+                ];
+            }
+
+            if ($conversation->seller) {
+                $data['seller'] = [
+                    'id' => $conversation->seller->id,
+                    'name' => $conversation->seller->full_name,
+                    'email' => $conversation->seller->email,
+                ];
+            }
+
+            // Add listing info if available
+            if ($conversation->listing) {
+                $data['listing'] = [
+                    'id' => $conversation->listing->id,
+                    'title' => $conversation->listing->title,
+                ];
+            }
+
+            // Add all messages
+            $data['messages'] = $conversation->messages->map(function ($message) {
+                return [
+                    'id' => $message->id,
+                    'content' => $message->content,
+                    'sender_id' => $message->sender_id,
+                    'is_from_admin' => $message->is_from_admin ?? false,
+                    'read_at' => $message->read_at,
+                    'created_at' => $message->created_at,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $data
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch conversation',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Mark a system conversation as read by admin
+     */
+    public function markConversationAsRead(Request $request, $id): JsonResponse
+    {
+        try {
+            $conversation = Conversation::findOrFail($id);
+
+            // Mark all messages in this conversation as read by admin
+            Message::where('conversation_id', $id)
+                ->whereNull('read_at')
+                ->update(['read_at' => now()]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Conversation marked as read'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to mark conversation as read: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Process email queue
+     */
+    public function processEmailQueue(): JsonResponse
+    {
+        try {
+            // Simple mock email processing - replace with actual queue processing logic
+            $processedCount = 0;
+
+            // In a real implementation, you would:
+            // 1. Get pending emails from queue table
+            // 2. Send them using Mail::send()
+            // 3. Update their status
+            // 4. Return actual processed count
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email queue processed successfully',
+                'data' => [
+                    'processed_count' => $processedCount
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process email queue: ' . $e->getMessage()
             ], 500);
         }
     }

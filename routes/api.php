@@ -8,41 +8,6 @@ Route::get('/test', function () {
     return response()->json(['message' => 'API routes working', 'timestamp' => now()]);
 });
 
-// Debug conversations route
-Route::get('/debug-conversations', function () {
-    $conversations = \App\Models\Conversation::select('id', 'type', 'title', 'status', 'created_at')->get();
-    return response()->json([
-        'total_conversations' => $conversations->count(),
-        'conversations' => $conversations,
-        'types' => $conversations->pluck('type')->unique()->values()
-    ]);
-});
-
-// Test admin conversations without auth
-Route::get('/test-admin-conversations', function () {
-    $query = \App\Models\Conversation::with(['participants', 'messages' => function($q) {
-        $q->latest()->limit(1);
-    }]);
-
-    $conversations = $query->withCount('messages')
-    ->orderBy('updated_at', 'desc')
-    ->paginate(20);
-
-    return response()->json([
-        'success' => true,
-        'data' => $conversations
-    ]);
-});
-
-// Check messages table structure
-Route::get('/debug-messages', function () {
-    $messages = \App\Models\Message::first();
-    return response()->json([
-        'sample_message' => $messages,
-        'message_attributes' => $messages ? array_keys($messages->getAttributes()) : [],
-        'total_messages' => \App\Models\Message::count()
-    ]);
-});
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
@@ -50,18 +15,24 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\BannerController;
+use App\Http\Controllers\Api\BannerPurchaseController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\SellerController;
 use App\Http\Controllers\Api\CloudinaryController;
 use App\Http\Controllers\Api\Communication\EmailConfigController;
-use App\Http\Controllers\Api\Communication\NewsLetterController;
 use App\Http\Controllers\Api\Communication\NewsLetterTemplateController;
+use App\Http\Controllers\Api\Communication\NewsLetterController;
+use App\Http\Controllers\Api\Communication\NewsletterSettingsController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\InquiryController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\KnowledgeBaseController;
+use App\Http\Controllers\Api\EmailConfigurationController;
+use App\Http\Controllers\Api\FinancialTransactionController;
+use App\Http\Controllers\Api\SystemMonitorController;
+use App\Http\Controllers\Api\Communication\NewsletterSubscriberController;
 use App\Models\EmailConfig;
 
 // Public routes
@@ -101,6 +72,9 @@ Route::prefix('v1')->group(function () {
     Route::get('/banners/configuration', [BannerController::class, 'getConfiguration']);
     Route::post('/banners/{id}/click', [BannerController::class, 'trackClick']);
     Route::post('/banners/{id}/impression', [BannerController::class, 'trackImpression']);
+
+    // Banner Purchase (public pricing)
+    Route::get('/banner-purchase/pricing', [BannerPurchaseController::class, 'getPricing']);
 
     // Inquiries (public routes)
     Route::post('/inquiries', [InquiryController::class, 'store']);
@@ -169,6 +143,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/conversations/{id}/archive', [ConversationController::class, 'archive']);
     Route::get('/messages/unread-count', [ConversationController::class, 'getUnreadCount']);
 
+    // System Conversations (User to Admin)
+    Route::get('/system-conversations', [\App\Http\Controllers\Api\AdminMessagingController::class, 'getSystemConversations']);
+    Route::get('/system-conversations/{id}', [\App\Http\Controllers\Api\AdminMessagingController::class, 'getSystemConversation']);
+    Route::post('/system-conversations', [\App\Http\Controllers\Api\AdminMessagingController::class, 'startSystemConversation']);
+    Route::post('/system-conversations/{id}/messages', [\App\Http\Controllers\Api\AdminMessagingController::class, 'sendSystemMessage']);
+    Route::patch('/system-conversations/{id}/read', [\App\Http\Controllers\Api\AdminMessagingController::class, 'markConversationAsRead']);
+
     // Notifications
     Route::get('/notifications/summary', [NotificationController::class, 'summary']);
     Route::get('/notifications/messages', [NotificationController::class, 'messages']);
@@ -213,6 +194,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/invoices/{id}/download', [AdminController::class, 'downloadUserInvoice']);
     });
 
+    // Banner Purchase Routes
+    Route::prefix('banner-purchase')->group(function () {
+        Route::post('/request', [BannerPurchaseController::class, 'createPurchaseRequest']);
+        Route::get('/my-requests', [BannerPurchaseController::class, 'getUserPurchaseRequests']);
+    });
+
     // Cloudinary image management
     Route::prefix('cloudinary')->group(function () {
         Route::post('/signature', [CloudinaryController::class, 'getUploadSignature']);
@@ -225,11 +212,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     });
 
     // Admin routes
-    Route::middleware('role:admin,moderator')->prefix('admin')->group(function () {
+    Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         // Listing management
         Route::get('/listings', [AdminController::class, 'listings']);
         Route::post('/listings/{id}/approve', [AdminController::class, 'approveListing']);
         Route::post('/listings/{id}/reject', [AdminController::class, 'rejectListing']);
+        Route::delete('/listings/{id}', [AdminController::class, 'deleteListing']);
         Route::post('/listings/{id}/feature', [AdminController::class, 'featureListing']);
 
         // Listing moderation
@@ -281,10 +269,17 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/users/{id}/subscription/cancel', [AdminController::class, 'cancelUserSubscription']);
 
         // Banner management
-        Route::apiResource('banners', BannerController::class);
         Route::get('/banners/active', [BannerController::class, 'active']);
         Route::get('/banners/revenue-analytics', [AdminController::class, 'getBannerRevenueAnalytics']);
         Route::get('/banners/pricing-tiers', [AdminController::class, 'getBannerPricingTiers']);
+        Route::apiResource('banners', BannerController::class);
+
+        // Banner Purchase Management
+        Route::prefix('banner-purchase')->group(function () {
+            Route::get('/requests', [BannerPurchaseController::class, 'getAllPurchaseRequests']);
+            Route::post('/requests/{id}/confirm-payment', [BannerPurchaseController::class, 'confirmPayment']);
+            Route::post('/requests/{id}/create-banner', [BannerPurchaseController::class, 'createBannerFromRequest']);
+        });
 
         // System settings
         Route::get('/settings', [AdminController::class, 'settings']);
@@ -319,6 +314,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/invoices/generate-for-application', [AdminController::class, 'generateInvoiceForApplication']);
         Route::post('/invoices/{id}/send', [AdminController::class, 'sendSellerInvoice']);
         Route::get('/invoices/{id}/download', [AdminController::class, 'downloadInvoice']);
+        Route::post('/invoices/{id}/mark-paid', [AdminController::class, 'markInvoiceAsPaid']);
+        Route::post('/invoices/sync-transactions', [AdminController::class, 'syncInvoiceTransactions']);
         Route::post('/invoices/{id}/approve-payment', [AdminController::class, 'approvePayment']);
         Route::get('/documents/download', [AdminController::class, 'downloadSellerDocument']);
 
@@ -332,6 +329,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         // Financial Management Routes
         Route::prefix('financial')->group(function () {
             Route::get('/stats', [\App\Http\Controllers\Api\FinancialController::class, 'getFinancialStats']);
+            Route::get('/revenue', [\App\Http\Controllers\Api\FinancialController::class, 'getRevenueSummary']);
+            Route::get('/expenses', [\App\Http\Controllers\Api\FinancialController::class, 'getExpenseSummary']);
+            Route::post('/expenses', [\App\Http\Controllers\Api\FinancialController::class, 'createExpense']);
+            Route::patch('/expenses/{id}', [\App\Http\Controllers\Api\FinancialController::class, 'updateExpense']);
+            Route::delete('/expenses/{id}', [\App\Http\Controllers\Api\FinancialController::class, 'deleteExpense']);
+            Route::get('/export', [\App\Http\Controllers\Api\FinancialController::class, 'exportFinancialReport']);
             Route::get('/transactions', [\App\Http\Controllers\Api\FinancialController::class, 'getTransactions']);
             Route::get('/trends', [\App\Http\Controllers\Api\FinancialController::class, 'getMonthlyTrends']);
             Route::get('/service-templates', [\App\Http\Controllers\Api\FinancialController::class, 'getServiceTemplates']);
@@ -341,11 +344,17 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
         // Customer & Supplier Management Routes
         Route::get('/customers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomers']);
+        Route::get('/customers/stats', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomerStats']);
         Route::get('/customers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomerDetails']);
         Route::post('/customers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'createOrUpdateCustomer']);
         Route::put('/customers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'createOrUpdateCustomer']);
         Route::get('/suppliers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getSuppliers']);
+        Route::get('/suppliers/stats', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getSupplierStats']);
         Route::get('/suppliers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getSupplierDetails']);
+        Route::post('/suppliers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'createOrUpdateSupplier']);
+        Route::put('/suppliers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'createOrUpdateSupplier']);
+        Route::delete('/customers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'deleteCustomer']);
+        Route::delete('/suppliers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'deleteSupplier']);
         Route::post('/export-customers-suppliers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'exportData']);
 
         // Admin Messaging Routes
@@ -357,11 +366,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             Route::delete('/', [\App\Http\Controllers\Api\AdminMessagingController::class, 'deleteMessages']);
         });
         Route::get('/conversations', [\App\Http\Controllers\Api\AdminMessagingController::class, 'getSystemConversations']);
+        Route::get('/conversations/{id}', [\App\Http\Controllers\Api\AdminMessagingController::class, 'getSystemConversation']);
+        Route::patch('/conversations/{id}/read', [\App\Http\Controllers\Api\AdminMessagingController::class, 'markConversationAsRead']);
         Route::get('/email-queue', [\App\Http\Controllers\Api\AdminMessagingController::class, 'getEmailQueueStatus']);
+        Route::post('/email-queue/process', [\App\Http\Controllers\Api\AdminMessagingController::class, 'processEmailQueue']);
 
         // Category Management Admin Routes
-        Route::apiResource('categories', CategoryController::class);
         Route::get('/categories/stats', [CategoryController::class, 'getStats']);
+        Route::apiResource('categories', CategoryController::class);
 
         // System Status Endpoint
         Route::get('/system/status', [AdminController::class, 'getSystemStatus']);
@@ -372,6 +384,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/listings/{listingId}/inquiries', [InquiryController::class, 'getForListing']);
 
 
+        // System Monitor Routes
+        Route::prefix('system')->group(function () {
+            Route::get('/metrics', [SystemMonitorController::class, 'getSystemMetrics']);
+            Route::get('/application-metrics', [SystemMonitorController::class, 'getApplicationMetrics']);
+            Route::get('/health', [SystemMonitorController::class, 'getHealthStatus']);
+            Route::get('/logs', [SystemMonitorController::class, 'getSystemLogs']);
+        });
+
         // Communication Managment
         Route::group(['prefix' => '/communication', 'as' => 'communication.'], function () {
             Route::group(['prefix' => '/newsletters', 'as' => 'newsletters.'], function () {
@@ -380,6 +400,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::get('/show/{id}', [NewsLetterController::class, 'show']);
                 Route::put('/update/{id}', [NewsLetterController::class, 'update']);
                 Route::delete('/delete/{id}', [NewsLetterController::class, 'destroy']);
+                Route::post('/send/{id}', [NewsLetterController::class, 'send']);
+                Route::post('/duplicate/{id}', [NewsLetterController::class, 'duplicate']);
             });
 
             Route::group(['prefix' => '/newsletter-templates', 'as' => 'newsletter-templates.'], function () {
@@ -388,14 +410,94 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::get('/show/{id}', [NewsLetterTemplateController::class, 'show']);
                 Route::put('/update/{id}', [NewsLetterTemplateController::class, 'update']);
                 Route::delete('/delete/{id}', [NewsLetterTemplateController::class, 'destroy']);
+                Route::post('/duplicate/{id}', [NewsLetterTemplateController::class, 'duplicate']);
+                Route::get('/preview/{id}', [NewsLetterTemplateController::class, 'preview']);
+            });
+
+            Route::group(['prefix' => '/newsletter-settings', 'as' => 'newsletter-settings.'], function () {
+                Route::get('/', [NewsletterSettingsController::class, 'index']);
+                Route::put('/update', [NewsletterSettingsController::class, 'update']);
+                Route::get('/automation-status', [NewsletterSettingsController::class, 'getAutomationStatus']);
+                Route::post('/toggle-automation', [NewsletterSettingsController::class, 'toggleAutomation']);
             });
 
             Route::group(['prefix' => '/email-configs', 'as' => 'email-configs.'], function () {
                 Route::get('/', [EmailConfigController::class, 'index']);
                 Route::post('/store', [EmailConfigController::class, 'store']);
-                Route::get('/show/{id}', [EmailConfigController::class, 'show']);
-                Route::post('/test/{id}', [EmailConfigController::class, 'test']);
+                Route::get('/show/{driver}', [EmailConfigController::class, 'show']);
+                Route::put('/update/{driver}', [EmailConfigController::class, 'update']);
+                Route::post('/test/{driver}', [EmailConfigController::class, 'test']);
             });
+        });
+
+        // Knowledge Base Management
+        Route::prefix('knowledge-base')->group(function () {
+            Route::get('/', [KnowledgeBaseController::class, 'indexAdmin']);
+            Route::post('/', [KnowledgeBaseController::class, 'store']);
+            Route::get('/categories', [KnowledgeBaseController::class, 'categoriesAdmin']);
+            Route::get('/statistics', [KnowledgeBaseController::class, 'statistics']);
+            Route::put('/{id}', [KnowledgeBaseController::class, 'update']);
+            Route::delete('/{id}', [KnowledgeBaseController::class, 'destroy']);
+        });
+
+        // Newsletter Management (uses Communication/NewsLetterController)
+        Route::prefix('newsletters')->group(function () {
+            Route::get('/', [NewsLetterController::class, 'index']);
+            Route::post('/', [NewsLetterController::class, 'store']);
+            Route::get('/stats', [NewsLetterController::class, 'getStats']);
+            Route::get('/settings', [NewsLetterController::class, 'getSettings']);
+            Route::put('/settings', [NewsLetterController::class, 'updateSettings']);
+            Route::get('/{id}', [NewsLetterController::class, 'show']);
+            Route::put('/{id}', [NewsLetterController::class, 'update']);
+            Route::delete('/{id}', [NewsLetterController::class, 'destroy']);
+            Route::post('/{id}/send', [NewsLetterController::class, 'send']);
+            Route::post('/{id}/duplicate', [NewsLetterController::class, 'duplicate']);
+        });
+
+        // Newsletter Templates Management
+        Route::prefix('newsletter-templates')->group(function () {
+            Route::get('/', [NewsLetterTemplateController::class, 'index']);
+            Route::post('/', [NewsLetterTemplateController::class, 'store']);
+            Route::get('/{id}', [NewsLetterTemplateController::class, 'show']);
+            Route::put('/{id}', [NewsLetterTemplateController::class, 'update']);
+            Route::delete('/{id}', [NewsLetterTemplateController::class, 'destroy']);
+            Route::post('/{id}/duplicate', [NewsLetterTemplateController::class, 'duplicate']);
+            Route::get('/{id}/preview', [NewsLetterTemplateController::class, 'preview']);
+        });
+
+        // Newsletter Settings Management
+        Route::prefix('newsletter-settings')->group(function () {
+            Route::get('/', [NewsLetterController::class, 'getSettings']);
+            Route::put('/', [NewsLetterController::class, 'updateSettings']);
+        });
+
+        // Newsletter Subscribers Management
+        Route::prefix('newsletter-subscribers')->group(function () {
+            Route::get('/', [NewsletterSubscriberController::class, 'index']);
+            Route::post('/', [NewsletterSubscriberController::class, 'store']);
+            Route::get('/stats', [NewsletterSubscriberController::class, 'getStats']);
+        });
+
+        // Email Configuration
+        Route::prefix('email-configuration')->group(function () {
+            Route::get('/', [EmailConfigurationController::class, 'index']);
+            Route::post('/', [EmailConfigurationController::class, 'store']);
+            Route::put('/{id}', [EmailConfigurationController::class, 'update']);
+            Route::delete('/{id}', [EmailConfigurationController::class, 'destroy']);
+            Route::post('/test', [EmailConfigurationController::class, 'testConfiguration']);
+            Route::get('/status', [EmailConfigurationController::class, 'getStatus']);
+        });
+
+        // Financial Transactions
+        Route::prefix('financial-transactions')->group(function () {
+            Route::get('/', [FinancialTransactionController::class, 'getTransactions']);
+            Route::post('/', [FinancialTransactionController::class, 'store']);
+            Route::put('/{id}', [FinancialTransactionController::class, 'update']);
+            Route::delete('/{id}', [FinancialTransactionController::class, 'destroy']);
+            Route::get('/summary', [FinancialTransactionController::class, 'getSummary']);
+            Route::get('/monthly-trends', [FinancialTransactionController::class, 'getMonthlyTrends']);
+            Route::get('/category-stats', [FinancialTransactionController::class, 'getCategoryStats']);
+            Route::post('/reconcile', [FinancialTransactionController::class, 'reconcile']);
         });
     });
 });

@@ -21,6 +21,7 @@ class Message extends Model
         'offer_currency',
         'is_system',
         'read_at',
+        'metadata',
     ];
 
     protected $casts = [
@@ -28,6 +29,7 @@ class Message extends Model
         'attachments' => 'array',
         'offer_price' => 'decimal:2',
         'is_system' => 'boolean',
+        'metadata' => 'array',
     ];
 
     public function conversation(): BelongsTo

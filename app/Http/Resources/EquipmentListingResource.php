@@ -91,8 +91,8 @@ class EquipmentListingResource extends JsonResource
                         'totalListings' => $sellerProfile?->total_listings ?? $seller->listings()->where('status', 'active')->count(),
                         'totalSales' => $seller->sales()->where('status', 'completed')->count(),
                         'responseTime' => $sellerProfile?->response_time ?? 'N/A',
-                        'joinedDate' => $seller->created_at?->format('M Y'),
-                        'lastSeen' => $seller->updated_at?->diffForHumans(),
+                        'joinedDate' => $seller->created_at ? $seller->created_at->format('M Y') : 'N/A',
+                        'lastSeen' => $seller->updated_at ? $seller->updated_at->diffForHumans() : 'Recently',
                     ],
                 ];
             }),

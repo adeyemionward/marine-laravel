@@ -59,64 +59,128 @@ class EmailConfigController extends Controller
     }
 
 
-    public function test(Request $request)
+    public function update(Request $request, $driver)
     {
-            $validated = $request->validate([
-                'test_email' => 'required|email',
-            ]);
+        $validated = $request->validate([
+            'smtp_host'   => 'sometimes|string',
+            'smtp_port'   => 'sometimes|integer',
+            'username'    => 'sometimes|email',
+            'password'    => 'sometimes|string',
+            'from_email'  => 'sometimes|email',
+            'from_name'   => 'nullable|string|max:255',
+            'encryption'  => 'nullable|string|in:tls,ssl,null',
+            'enable_smtp' => 'sometimes|boolean',
+        ]);
 
-            $config = EmailConfig::first();
-            if (!$config) {
-                return response()->json(['message' => 'No SMTP configuration found'], 404);
-            }
+        $config = EmailConfig::where('driver', $driver)->first();
 
-            // Determine SMTP settings based on driver
-            switch ($config->driver) {
-                case 'gmail':
-                    $smtpHost = 'smtp.gmail.com';
-                    $smtpPort = 587;
-                    $encryption = 'tls';
-                    break;
-
-                case 'outlook':
-                    $smtpHost = 'smtp.office365.com';
-                    $smtpPort = 587;
-                    $encryption = 'tls';
-                    break;
-
-                case 'custom':
-                default:
-                    $smtpHost = $config->smtp_host;
-                    $smtpPort = $config->smtp_port;
-                    $encryption = $config->encryption ?? 'tls';
-                    break;
-            }
-
-            // temporarily set mail config
-            config([
-                'mail.default' => 'smtp',
-                'mail.mailers.smtp.transport' => 'smtp',
-                'mail.mailers.smtp.host' => $smtpHost,
-                'mail.mailers.smtp.port' => $smtpPort,
-                'mail.mailers.smtp.encryption' => $encryption,
-                'mail.mailers.smtp.username' => $config->username,
-                'mail.mailers.smtp.password' => Crypt::decryptString($config->password),
-                'mail.from.address' => $config->from_email,
-                'mail.from.name' => $config->from_name ?? 'System',
-            ]);
-
-            try {
-                Mail::raw('This is a test email from Marine.ng SMTP configuration.', function ($message) use ($validated) {
-                    $message->to($validated['test_email'])->subject('Test Email Configuration');
-                });
-
-                return response()->json(['message' => 'Test email sent successfully']);
-            } catch (\Exception $e) {
-                return response()->json([
-                    'message' => 'Failed to send test email',
-                    'error' => $e->getMessage(),
-                ], 500);
-            }
+        if (!$config) {
+            return response()->json(['message' => "No configuration found for driver: $driver"], 404);
         }
 
+        // If password is provided, encrypt it
+        if (isset($validated['password'])) {
+            $validated['password'] = Crypt::encryptString($validated['password']);
+        }
+
+        // Update with proper SMTP settings for known drivers
+        if ($driver === 'gmail') {
+            $validated['smtp_host'] = 'smtp.gmail.com';
+            $validated['smtp_port'] = 587;
+            $validated['encryption'] = 'tls';
+        } elseif ($driver === 'outlook') {
+            $validated['smtp_host'] = 'smtp.office365.com';
+            $validated['smtp_port'] = 587;
+            $validated['encryption'] = 'tls';
+        }
+
+        $config->update($validated);
+
+        return response()->json([
+            'message' => 'Email configuration updated successfully',
+            'data'    => $config,
+        ]);
     }
+
+    public function test(Request $request, $driver)
+    {
+        $validated = $request->validate([
+            'test_email' => 'required|email',
+        ]);
+
+        $config = EmailConfig::where('driver', $driver)->first();
+
+        if (!$config) {
+            return response()->json(['message' => "No configuration found for driver: $driver"], 404);
+        }
+
+        // Determine SMTP settings based on driver
+        switch ($config->driver) {
+            case 'gmail':
+                $smtpHost = 'smtp.gmail.com';
+                $smtpPort = 587;
+                $encryption = 'tls';
+                break;
+
+            case 'outlook':
+                $smtpHost = 'smtp.office365.com';
+                $smtpPort = 587;
+                $encryption = 'tls';
+                break;
+
+            case 'custom':
+            default:
+                $smtpHost = $config->smtp_host;
+                $smtpPort = $config->smtp_port;
+                $encryption = $config->encryption ?? 'tls';
+                break;
+        }
+
+        // temporarily set mail config
+        config([
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.transport' => 'smtp',
+            'mail.mailers.smtp.host' => $smtpHost,
+            'mail.mailers.smtp.port' => $smtpPort,
+            'mail.mailers.smtp.encryption' => $encryption,
+            'mail.mailers.smtp.username' => $config->username,
+            'mail.mailers.smtp.password' => Crypt::decryptString($config->password),
+            'mail.from.address' => $config->from_email,
+            'mail.from.name' => $config->from_name ?? 'Marine.ng System',
+        ]);
+
+        try {
+            Mail::raw('This is a test email from Marine.ng SMTP configuration.', function ($message) use ($validated, $config) {
+                $message->to($validated['test_email'])
+                    ->subject('Test Email Configuration - Marine.ng');
+            });
+
+            return response()->json([
+                'message' => 'Test email sent successfully',
+                'sent_to' => $validated['test_email'],
+                'smtp_host' => $smtpHost,
+                'smtp_port' => $smtpPort
+            ]);
+        } catch (\Exception $e) {
+            // Provide helpful error messages for common issues
+            $errorMessage = $e->getMessage();
+            $helpfulHint = '';
+
+            if (strpos($errorMessage, 'Authentication unsuccessful') !== false ||
+                strpos($errorMessage, 'basic authentication is disabled') !== false) {
+                $helpfulHint = ' For Gmail, use an App Password instead of your regular password. Go to Google Account settings > Security > 2-Step Verification > App passwords.';
+            }
+
+            return response()->json([
+                'message' => 'Failed to send test email',
+                'error' => $errorMessage,
+                'hint' => $helpfulHint,
+                'smtp_settings' => [
+                    'host' => $smtpHost,
+                    'port' => $smtpPort,
+                    'encryption' => $encryption
+                ]
+            ], 500);
+        }
+    }
+}

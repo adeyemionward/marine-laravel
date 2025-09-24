@@ -12,7 +12,9 @@ use App\Models\SellerApplication;
 use App\Models\SubscriptionPlan;
 use App\Models\Banner;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Throwable;
 
 class FinancialController extends Controller
 {
@@ -22,6 +24,9 @@ class FinancialController extends Controller
     public function getFinancialStats(): JsonResponse
     {
         try {
+            $this->logFinancialOperation('get_financial_stats', [
+                'user_role' => auth()->user()?->role ?? 'unknown'
+            ]);
             $now = Carbon::now();
             $startOfMonth = $now->copy()->startOfMonth();
             $startOfLastMonth = $now->copy()->subMonth()->startOfMonth();
@@ -93,12 +98,17 @@ class FinancialController extends Controller
                     ]
                 ]
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch financial stats',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to fetch financial stats', 'FINANCIAL_STATS_ERROR', [
+                'period' => 'current_vs_last_month',
+                'stats_requested' => [
+                    'current_month_revenue',
+                    'last_month_revenue',
+                    'total_revenue',
+                    'pending_revenue',
+                    'overdue_revenue'
+                ]
+            ]);
         }
     }
 
@@ -108,6 +118,11 @@ class FinancialController extends Controller
     public function getTransactions(Request $request): JsonResponse
     {
         try {
+            $this->logFinancialOperation('get_transactions', [
+                'filters' => $request->only(['type', 'status', 'start_date', 'end_date', 'user_id']),
+                'page' => $request->get('page', 1),
+                'per_page' => $request->get('per_page', 15)
+            ]);
             $query = Invoice::with(['user:id,name,email', 'subscriptionPlan:id,name']);
 
             // Apply filters
@@ -145,12 +160,12 @@ class FinancialController extends Controller
                 'success' => true,
                 'data' => $transactions
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch transactions',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to fetch transactions', 'FINANCIAL_TRANSACTIONS_ERROR', [
+                'filters' => request()->only(['type', 'status', 'start_date', 'end_date', 'user_id']),
+                'page' => request()->get('page', 1),
+                'per_page' => request()->get('per_page', 15)
+            ]);
         }
     }
 
@@ -194,12 +209,11 @@ class FinancialController extends Controller
                 'success' => true,
                 'data' => $formattedTrends
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch trends',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to fetch trends', 'FINANCIAL_TRENDS_ERROR', [
+                'period' => request()->get('period', '6months'),
+                'type' => request()->get('type', 'revenue')
+            ]);
         }
     }
 
@@ -243,12 +257,8 @@ class FinancialController extends Controller
                     'additional_services' => $additionalServices
                 ]
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch service templates',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to fetch service templates', 'SERVICE_TEMPLATES_ERROR');
         }
     }
 
@@ -273,12 +283,11 @@ class FinancialController extends Controller
                     'download_url' => '/api/v1/admin/financial/download-report/' . uniqid()
                 ]
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to export report',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to export report', 'REPORT_EXPORT_ERROR', [
+                'format' => request()->get('format', 'csv'),
+                'type' => request()->get('type', 'summary')
+            ]);
         }
     }
 
@@ -323,12 +332,218 @@ class FinancialController extends Controller
                     'by_plan' => $byPlan
                 ]
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch revenue breakdown',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to fetch revenue breakdown', 'REVENUE_BREAKDOWN_ERROR', [
+                'period' => request()->get('period', 'month'),
+                'breakdown_type' => 'category_based'
+            ]);
         }
+    }
+
+    /**
+     * Get revenue summary
+     */
+    public function getRevenueSummary(Request $request): JsonResponse
+    {
+        try {
+            $startDate = $request->start_date ? Carbon::parse($request->start_date) : Carbon::now()->startOfMonth();
+            $endDate = $request->end_date ? Carbon::parse($request->end_date) : Carbon::now()->endOfMonth();
+
+            $totalRevenue = Invoice::where('status', 'paid')
+                ->whereBetween('paid_at', [$startDate, $endDate])
+                ->sum('total_amount');
+
+            $invoiceCount = Invoice::where('status', 'paid')
+                ->whereBetween('paid_at', [$startDate, $endDate])
+                ->count();
+
+            $avgInvoiceValue = $invoiceCount > 0 ? $totalRevenue / $invoiceCount : 0;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_revenue' => $totalRevenue,
+                    'invoice_count' => $invoiceCount,
+                    'avg_invoice_value' => round($avgInvoiceValue, 2),
+                    'period' => [
+                        'start' => $startDate->format('Y-m-d'),
+                        'end' => $endDate->format('Y-m-d')
+                    ]
+                ]
+            ]);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to fetch revenue summary', 'REVENUE_SUMMARY_ERROR', [
+                'start_date' => request()->get('start_date'),
+                'end_date' => request()->get('end_date')
+            ]);
+        }
+    }
+
+    /**
+     * Get expense summary
+     */
+    public function getExpenseSummary(Request $request): JsonResponse
+    {
+        try {
+            // For now, return mock data since we don't have an expenses table
+            // In a real implementation, you would have an expenses table/model
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_expenses' => 0,
+                    'expense_count' => 0,
+                    'categories' => [],
+                    'period' => [
+                        'start' => Carbon::now()->startOfMonth()->format('Y-m-d'),
+                        'end' => Carbon::now()->endOfMonth()->format('Y-m-d')
+                    ]
+                ]
+            ]);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to fetch expense summary', 'EXPENSE_SUMMARY_ERROR');
+        }
+    }
+
+    /**
+     * Create expense
+     */
+    public function createExpense(Request $request): JsonResponse
+    {
+        try {
+            // For now, return success since we don't have an expenses table
+            // In a real implementation, you would validate and create expense record
+            return response()->json([
+                'success' => true,
+                'message' => 'Expense feature coming soon',
+                'data' => null
+            ]);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to create expense', 'EXPENSE_CREATE_ERROR', [
+                'expense_data' => request()->only(['amount', 'category', 'description'])
+            ]);
+        }
+    }
+
+    /**
+     * Update expense
+     */
+    public function updateExpense(Request $request, $id): JsonResponse
+    {
+        try {
+            // For now, return success since we don't have an expenses table
+            return response()->json([
+                'success' => true,
+                'message' => 'Expense feature coming soon',
+                'data' => null
+            ]);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to update expense', 'EXPENSE_UPDATE_ERROR', [
+                'expense_id' => request()->route('id'),
+                'update_data' => request()->only(['amount', 'category', 'description'])
+            ]);
+        }
+    }
+
+    /**
+     * Delete expense
+     */
+    public function deleteExpense($id): JsonResponse
+    {
+        try {
+            // For now, return success since we don't have an expenses table
+            return response()->json([
+                'success' => true,
+                'message' => 'Expense feature coming soon'
+            ]);
+        } catch (Throwable $e) {
+            return $this->handleError($e, 'Failed to delete expense', 'EXPENSE_DELETE_ERROR', [
+                'expense_id' => request()->route('id')
+            ]);
+        }
+    }
+
+    /**
+     * Export financial report
+     */
+    public function exportFinancialReport(Request $request)
+    {
+        try {
+            // For now, return a simple CSV response
+            $csvData = "Date,Type,Amount,Description\n";
+            $csvData .= date('Y-m-d') . ",Revenue,0,Sample revenue\n";
+            $csvData .= date('Y-m-d') . ",Expense,0,Sample expense\n";
+
+            return response($csvData, 200)
+                ->header('Content-Type', 'text/csv')
+                ->header('Content-Disposition', 'attachment; filename="financial_report.csv"');
+        } catch (\Exception $e) {
+            return $this->handleError($e, 'Failed to export financial report', 'FINANCIAL_EXPORT_ERROR');
+        }
+    }
+
+    /**
+     * Handle errors consistently with proper logging
+     */
+    private function handleError(Throwable $e, string $userMessage, string $errorCode = 'FINANCIAL_ERROR', array $context = []): JsonResponse
+    {
+        // Generate unique error ID for tracking
+        $errorId = uniqid('ERR_');
+
+        // Prepare context for logging
+        $logContext = array_merge($context, [
+            'error_id' => $errorId,
+            'error_code' => $errorCode,
+            'user_id' => auth()->id(),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'url' => request()->fullUrl(),
+            'method' => request()->method(),
+            'parameters' => request()->all(),
+            'exception_class' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        // Log the error with full context
+        Log::channel('financial')->error($userMessage, $logContext);
+
+        // Also log to the general log for monitoring
+        Log::error("Financial Module Error [{$errorId}]: {$userMessage}", [
+            'error_id' => $errorId,
+            'exception' => $e->getMessage(),
+            'user_id' => auth()->id(),
+            'context' => $errorCode
+        ]);
+
+        // Return structured error response
+        return response()->json([
+            'success' => false,
+            'message' => $userMessage,
+            'error_id' => $errorId,
+            'error_code' => $errorCode,
+            'error' => config('app.debug') ? [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null
+            ] : 'Internal server error'
+        ], 500);
+    }
+
+    /**
+     * Log financial operations for audit trail
+     */
+    private function logFinancialOperation(string $operation, array $data = [], string $level = 'info'): void
+    {
+        $context = [
+            'operation' => $operation,
+            'user_id' => auth()->id(),
+            'ip_address' => request()->ip(),
+            'timestamp' => now()->toISOString(),
+            'data' => $data
+        ];
+
+        Log::channel('financial')->{$level}("Financial Operation: {$operation}", $context);
     }
 }

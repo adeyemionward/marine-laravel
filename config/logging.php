@@ -127,6 +127,22 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'financial' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/financial/financial.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_FINANCIAL_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
+        'audit' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/audit/audit.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => env('LOG_AUDIT_DAYS', 90),
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

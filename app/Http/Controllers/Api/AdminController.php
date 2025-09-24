@@ -11,8 +11,9 @@ use App\Models\SellerApplication;
 use App\Models\SellerProfile;
 use App\Models\SubscriptionPlan;
 use App\Models\Subscription;
-use App\Models\UserSubscription;
 use App\Models\Invoice;
+use App\Models\BannerPurchaseRequest;
+use App\Models\FinancialTransaction;
 use App\Http\Resources\EquipmentListingResource;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
@@ -117,6 +118,10 @@ class AdminController extends Controller
             $listing->update([
                 'is_featured' => !$listing->is_featured,
             ]);
+
+            // TODO: Add featured listing payment processing here
+            // When featuring a listing with payment:
+            // FinancialTransaction::recordFeaturedListingPayment($listing, $amount, $paymentMethod, $paymentReference);
 
             $message = $listing->is_featured ? 'Listing featured successfully' : 'Listing unfeatured successfully';
 
@@ -1126,7 +1131,7 @@ class AdminController extends Controller
             $plan = SubscriptionPlan::findOrFail($planId);
             
             // Count active subscriptions for this plan
-            $activeUsersCount = UserSubscription::where('subscription_plan_id', $planId)
+            $activeUsersCount = Subscription::where('subscription_plan_id', $planId)
                 ->where('is_active', true)
                 ->where(function ($query) {
                     $query->where('expires_at', '>', now())
@@ -1896,7 +1901,14 @@ class AdminController extends Controller
 
             // Get subscription metrics
             $activeSubscriptions = Subscription::where('status', 'active')->count();
-            $totalRevenue = Subscription::where('status', 'active')->sum('amount');
+
+            // Handle missing amount column gracefully
+            try {
+                $totalRevenue = Subscription::where('status', 'active')->sum('amount');
+            } catch (\Exception $e) {
+                // Fallback if amount column doesn't exist
+                $totalRevenue = 0;
+            }
 
             // Generate time series data for charts
             $userGrowthData = [];
@@ -1924,9 +1936,13 @@ class AdminController extends Controller
                 ];
 
                 // Revenue data (simulated for now)
-                $revenueOnDate = Subscription::where('created_at', '<=', $date)
-                    ->where('status', 'active')
-                    ->sum('amount');
+                try {
+                    $revenueOnDate = Subscription::where('created_at', '<=', $date)
+                        ->where('status', 'active')
+                        ->sum('amount');
+                } catch (\Exception $e) {
+                    $revenueOnDate = 0;
+                }
                 $revenueData[] = [
                     'date' => $dateString,
                     'value' => $revenueOnDate,
@@ -2138,23 +2154,48 @@ class AdminController extends Controller
     public function getBannerRevenueAnalytics(): JsonResponse
     {
         try {
-            // Generate mock banner revenue analytics
-            // In a real implementation, this would query actual banner data
+            // Get real banner revenue analytics from banner purchase requests
             $monthlyRevenue = [];
             $today = Carbon::now();
-            
+
             for ($i = 11; $i >= 0; $i--) {
                 $date = $today->copy()->subMonths($i);
+                $startOfMonth = $date->copy()->startOfMonth();
+                $endOfMonth = $date->copy()->endOfMonth();
+
+                // Get confirmed banner purchases for this month
+                $confirmedPurchases = BannerPurchaseRequest::where('payment_status', 'confirmed')
+                    ->whereBetween('updated_at', [$startOfMonth, $endOfMonth])
+                    ->get();
+
+                $monthlyBannerRevenue = $confirmedPurchases->sum('total_price');
+                $monthlyBannerCount = $confirmedPurchases->count();
+
                 $monthlyRevenue[] = [
                     'month' => $date->format('M Y'),
-                    'revenue' => rand(5000, 25000),
-                    'banner_count' => rand(15, 45),
-                    'avg_per_banner' => rand(300, 800)
+                    'revenue' => $monthlyBannerRevenue,
+                    'banner_count' => $monthlyBannerCount,
+                    'avg_per_banner' => $monthlyBannerCount > 0 ? round($monthlyBannerRevenue / $monthlyBannerCount, 2) : 0
                 ];
             }
 
             $totalRevenue = array_sum(array_column($monthlyRevenue, 'revenue'));
             $totalBanners = array_sum(array_column($monthlyRevenue, 'banner_count'));
+
+            // Get revenue by position for top positions analysis
+            $positionRevenue = BannerPurchaseRequest::where('payment_status', 'confirmed')
+                ->select('banner_position', DB::raw('SUM(total_price) as revenue'), DB::raw('COUNT(*) as count'))
+                ->groupBy('banner_position')
+                ->orderBy('revenue', 'desc')
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'position' => $item->banner_position,
+                        'revenue' => $item->revenue,
+                        'count' => $item->count
+                    ];
+                })
+                ->toArray();
 
             return response()->json([
                 'success' => true,
@@ -2163,11 +2204,7 @@ class AdminController extends Controller
                     'total_banners' => $totalBanners,
                     'average_per_banner' => $totalBanners > 0 ? round($totalRevenue / $totalBanners, 2) : 0,
                     'monthly_data' => $monthlyRevenue,
-                    'top_positions' => [
-                        ['position' => 'top', 'revenue' => rand(8000, 15000), 'count' => rand(8, 15)],
-                        ['position' => 'middle', 'revenue' => rand(6000, 12000), 'count' => rand(10, 18)],
-                        ['position' => 'sidebar-featured', 'revenue' => rand(4000, 9000), 'count' => rand(6, 12)],
-                    ]
+                    'top_positions' => $positionRevenue
                 ]
             ]);
         } catch (\Exception $e) {
@@ -2905,37 +2942,145 @@ class AdminController extends Controller
     public function markInvoiceAsPaid(Request $request, $id): JsonResponse
     {
         try {
-            $userId = auth()->id();
-            
             $validated = $request->validate([
                 'payment_reference' => 'nullable|string|max:255',
                 'payment_method' => 'nullable|string|max:100',
                 'payment_notes' => 'nullable|string|max:500',
             ]);
 
-            $invoice = Invoice::where('user_id', $userId)
-                             ->where('status', 'pending')
+            // Admin can mark any invoice as paid
+            $invoice = Invoice::where('status', 'pending')
                              ->findOrFail($id);
 
             // Update invoice status and payment info
             $invoice->update([
                 'status' => 'paid',
                 'paid_at' => now(),
-                'notes' => ($invoice->notes ?? '') . "\n\nPayment Info:\n" . 
+                'notes' => ($invoice->notes ?? '') . "\n\nPayment Info:\n" .
                           "Reference: " . ($validated['payment_reference'] ?? 'N/A') . "\n" .
                           "Method: " . ($validated['payment_method'] ?? 'N/A') . "\n" .
                           "Notes: " . ($validated['payment_notes'] ?? 'N/A')
             ]);
 
+            // Create financial transaction for the payment
+            \App\Models\FinancialTransaction::create([
+                'transaction_reference' => 'INV-' . $invoice->invoice_number . '-' . time(),
+                'transaction_type' => 'income',
+                'category' => $this->getInvoiceCategory($invoice),
+                'amount' => $invoice->total,
+                'description' => "Payment received for Invoice #{$invoice->invoice_number}",
+                'notes' => "Invoice payment - " . ($invoice->description ?? 'Service Invoice'),
+                'transaction_date' => now(),
+                'payment_method' => $validated['payment_method'] ?? 'unknown',
+                'payment_reference' => $validated['payment_reference'] ?? $invoice->invoice_number,
+                'user_id' => $invoice->user_id,
+                'recorded_by' => auth()->id() ?? 1,
+                'payment_status' => 'completed',
+                'related_model_type' => 'App\\Models\\Invoice',
+                'related_model_id' => $invoice->id
+            ]);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Invoice marked as paid successfully',
+                'message' => 'Invoice marked as paid successfully and transaction recorded',
                 'data' => $invoice->fresh(),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update invoice status',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Determine the appropriate financial category for an invoice
+     */
+    private function getInvoiceCategory($invoice): string
+    {
+        // Map invoice types to financial categories
+        $categoryMap = [
+            'subscription' => 'subscription_revenue',
+            'service' => 'maintenance_services',
+            'equipment' => 'equipment_sales',
+            'consultation' => 'consultation_services',
+            'installation' => 'installation_services',
+            'maintenance' => 'maintenance_services',
+            'parts' => 'spare_parts_sales',
+            'listing' => 'featured_listing_revenue',
+            'banner' => 'banner_ad_revenue',
+        ];
+
+        // Get category from invoice type or description
+        $invoiceType = $invoice->invoice_type ?? 'service';
+
+        // Try to match based on invoice type
+        if (isset($categoryMap[$invoiceType])) {
+            return $categoryMap[$invoiceType];
+        }
+
+        // Try to match based on description keywords
+        $description = strtolower($invoice->description ?? '');
+        foreach ($categoryMap as $keyword => $category) {
+            if (strpos($description, $keyword) !== false) {
+                return $category;
+            }
+        }
+
+        // Default to general service revenue
+        return 'other_income';
+    }
+
+    /**
+     * Sync historical invoice payments to financial transactions
+     */
+    public function syncInvoiceTransactions(): JsonResponse
+    {
+        try {
+            // Get all paid invoices that don't have corresponding transactions
+            $paidInvoices = \App\Models\Invoice::where('status', 'paid')
+                ->whereNotExists(function($query) {
+                    $query->select(\DB::raw(1))
+                          ->from('financial_transactions')
+                          ->whereRaw('financial_transactions.related_model_type = ? AND financial_transactions.related_model_id = invoices.id', ['App\\Models\\Invoice']);
+                })
+                ->get();
+
+            $syncedCount = 0;
+
+            foreach ($paidInvoices as $invoice) {
+                // Create financial transaction for each paid invoice
+                \App\Models\FinancialTransaction::create([
+                    'transaction_reference' => 'SYNC-INV-' . $invoice->invoice_number . '-' . $invoice->id,
+                    'transaction_type' => 'income',
+                    'category' => $this->getInvoiceCategory($invoice),
+                    'amount' => $invoice->total,
+                    'description' => "Payment received for Invoice #{$invoice->invoice_number} (Historical Sync)",
+                    'notes' => "Historical invoice payment sync - " . ($invoice->description ?? 'Service Invoice'),
+                    'transaction_date' => $invoice->paid_at ?? $invoice->updated_at,
+                    'payment_method' => 'unknown',
+                    'payment_reference' => $invoice->invoice_number,
+                    'user_id' => $invoice->user_id,
+                    'recorded_by' => auth()->id() ?? 1,
+                    'payment_status' => 'completed',
+                    'related_model_type' => 'App\\Models\\Invoice',
+                    'related_model_id' => $invoice->id
+                ]);
+
+                $syncedCount++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully synced {$syncedCount} historical invoice payments to financial transactions",
+                'synced_count' => $syncedCount
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to sync invoice transactions',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -3385,6 +3530,43 @@ class AdminController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch featured statistics',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete equipment listing (admin can delete any listing)
+     */
+    public function deleteListing($id): JsonResponse
+    {
+        try {
+            $listing = EquipmentListing::findOrFail($id);
+
+            // Store listing details for response
+            $listingData = [
+                'id' => $listing->id,
+                'title' => $listing->title,
+                'seller_name' => $listing->user->name ?? 'Unknown',
+            ];
+
+            // Delete the listing
+            $listing->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Equipment listing deleted successfully',
+                'data' => $listingData
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Equipment listing not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete equipment listing',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\EquipmentListing;
+use App\Events\MessageSent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -307,6 +308,9 @@ class ConversationController extends Controller
 
             // Load sender relationship
             $message->load('sender');
+
+            // Broadcast the message to other users in the conversation
+            broadcast(new MessageSent($message));
 
             return response()->json([
                 'success' => true,

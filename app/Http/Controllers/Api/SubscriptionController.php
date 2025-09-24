@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SubscriptionPlan;
 use App\Models\Subscription;
+use App\Models\FinancialTransaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -83,6 +84,14 @@ class SubscriptionController extends Controller
                 'auto_renew' => true,
                 'payment_method_id' => $validated['payment_method_id'] ?? null,
             ]);
+
+            // Record financial transaction for subscription payment
+            FinancialTransaction::recordSubscriptionPayment(
+                $subscription,
+                $plan->price,
+                $validated['payment_method_id'] ?? 'unknown',
+                $request->input('payment_reference')
+            );
 
             return response()->json([
                 'success' => true,

@@ -147,16 +147,45 @@ class BannerController extends Controller
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
                 'description' => 'nullable|string|max:500',
-                'image_url' => 'required|url',
+                'media_url' => 'required|string',
                 'link_url' => 'nullable|url',
-                'link_text' => 'nullable|string|max:100',
-                'position' => 'required|in:hero,sidebar,footer,popup',
-                'sort_order' => 'nullable|integer|min:0',
-                'is_active' => 'boolean',
+                'banner_position' => 'required|string',
+                'priority' => 'nullable|integer|min:0',
+                'status' => 'nullable|in:active,inactive,expired',
+                'start_date' => 'nullable|date',
+                'end_date' => 'nullable|date',
+                'media_type' => 'nullable|in:image,video',
+                'customer_id' => 'nullable|integer',
+                'banner_charge' => 'nullable|numeric|min:0',
+                'purchaser_id' => 'nullable|integer',
+                'purchase_price' => 'nullable|numeric|min:0',
             ]);
 
+            // Map banner_position to position field
+            if (isset($validated['banner_position'])) {
+                $validated['position'] = $validated['banner_position'];
+                unset($validated['banner_position']);
+            }
+
+            // Map banner_charge to purchase_price field
+            if (isset($validated['banner_charge'])) {
+                $validated['purchase_price'] = $validated['banner_charge'];
+                unset($validated['banner_charge']);
+            }
+
             $validated['created_by'] = Auth::user()->profile->id;
-            $validated['sort_order'] = $validated['sort_order'] ?? 0;
+            $validated['priority'] = $validated['priority'] ?? 1;
+            $validated['media_type'] = $validated['media_type'] ?? 'image';
+            $validated['status'] = $validated['status'] ?? 'active';
+            $validated['banner_size'] = Banner::SIZE_LARGE;
+            $validated['display_context'] = Banner::CONTEXT_HOMEPAGE;
+            $validated['show_on_desktop'] = true;
+            $validated['show_on_mobile'] = true;
+            $validated['sort_order'] = 0;
+            $validated['purchase_status'] = 'paid';
+            $validated['user_target'] = 'all';
+            $validated['banner_type'] = Banner::TYPE_PROMOTIONAL;
+            $validated['start_date'] = now();
 
             $banner = Banner::create($validated);
 
@@ -218,13 +247,31 @@ class BannerController extends Controller
             $validated = $request->validate([
                 'title' => 'sometimes|string|max:255',
                 'description' => 'nullable|string|max:500',
-                'image_url' => 'sometimes|url',
+                'media_url' => 'sometimes|string',
                 'link_url' => 'nullable|url',
-                'link_text' => 'nullable|string|max:100',
-                'position' => 'sometimes|in:hero,sidebar,footer,popup',
-                'sort_order' => 'nullable|integer|min:0',
-                'is_active' => 'boolean',
+                'banner_position' => 'sometimes|string',
+                'priority' => 'sometimes|integer|min:0',
+                'status' => 'sometimes|in:active,inactive,expired',
+                'start_date' => 'sometimes|date',
+                'end_date' => 'sometimes|date',
+                'media_type' => 'sometimes|in:image,video',
+                'customer_id' => 'sometimes|integer',
+                'banner_charge' => 'sometimes|numeric|min:0',
+                'purchaser_id' => 'sometimes|integer',
+                'purchase_price' => 'sometimes|numeric|min:0',
             ]);
+
+            // Map banner_position to position field
+            if (isset($validated['banner_position'])) {
+                $validated['position'] = $validated['banner_position'];
+                unset($validated['banner_position']);
+            }
+
+            // Map banner_charge to purchase_price field
+            if (isset($validated['banner_charge'])) {
+                $validated['purchase_price'] = $validated['banner_charge'];
+                unset($validated['banner_charge']);
+            }
 
             $banner->update($validated);
 
@@ -264,10 +311,9 @@ class BannerController extends Controller
     public function active(): JsonResponse
     {
         try {
-            $banners = Banner::where('is_active', true)
-                ->orderBy('sort_order')
-                ->orderBy('created_at', 'desc')
-                ->get(['id', 'title', 'description', 'image_url', 'link_url', 'position', 'sort_order']);
+            $banners = Banner::active()
+                ->byPriority()
+                ->get(['id', 'title', 'description', 'media_url', 'link_url', 'position', 'sort_order']);
 
             return response()->json([
                 'success' => true,

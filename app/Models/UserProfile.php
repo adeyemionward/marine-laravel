@@ -58,7 +58,7 @@ class UserProfile extends Model
 
     public function subscriptions(): HasMany
     {
-        return $this->hasMany(UserSubscription::class, 'user_id');
+        return $this->hasMany(Subscription::class, 'user_id');
     }
 
     public function favorites(): HasMany

@@ -52,23 +52,69 @@ class CloudinaryController extends Controller
      */
     public function uploadImage(Request $request): JsonResponse
     {
+        // Increase PHP upload limits for large banner images
+        ini_set('upload_max_filesize', '20M');
+        ini_set('post_max_size', '20M');
+        ini_set('memory_limit', '256M');
+        ini_set('max_execution_time', '300');
+
+        \Log::info('CloudinaryController::uploadImage START', [
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'headers' => $request->headers->all(),
+            'content_type' => $request->header('Content-Type'),
+            'user_id' => auth()->id(),
+            'has_file' => $request->hasFile('image'),
+            'folder' => $request->get('folder'),
+            'request_data' => $request->all(),
+            'php_upload_limits' => [
+                'upload_max_filesize' => ini_get('upload_max_filesize'),
+                'post_max_size' => ini_get('post_max_size'),
+                'memory_limit' => ini_get('memory_limit')
+            ]
+        ]);
+
         try {
-            $request->validate([
-                'image' => 'required|image|max:10240', // 10MB max
-                'folder' => 'string|in:equipment,profiles,documents,banners',
-                'public_id' => 'string|max:255',
-                'tags' => 'string'
-            ]);
+
+            try {
+                $request->validate([
+                    'image' => 'required|image|max:10240', // 10MB max
+                    'folder' => 'string|in:equipment,profiles,documents,banners',
+                    'public_id' => 'string|max:255',
+                    'tags' => 'string'
+                ]);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                \Log::error('CloudinaryController validation failed', [
+                    'errors' => $e->errors(),
+                    'request_data' => $request->all()
+                ]);
+                throw $e;
+            }
 
             $folder = $request->get('folder', 'general');
             $options = $request->only(['public_id', 'tags']);
             
             if ($request->hasFile('image')) {
+                \Log::info('CloudinaryController: About to call cloudinaryService->uploadImage', [
+                    'folder' => $folder,
+                    'options' => $options,
+                    'service_exists' => isset($this->cloudinaryService),
+                    'file_details' => [
+                        'name' => $request->file('image')->getClientOriginalName(),
+                        'size' => $request->file('image')->getSize(),
+                        'mime' => $request->file('image')->getMimeType()
+                    ]
+                ]);
+
                 $result = $this->cloudinaryService->uploadImage(
                     $request->file('image'),
                     $folder,
                     $options
                 );
+
+                \Log::info('CloudinaryController: cloudinaryService->uploadImage completed', [
+                    'result' => $result
+                ]);
 
                 if ($result['success']) {
                     return response()->json([
@@ -89,6 +135,13 @@ class CloudinaryController extends Controller
                 'message' => 'No image file provided'
             ], 400);
         } catch (\Exception $e) {
+            \Log::error('CloudinaryController::uploadImage error', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Upload failed',
