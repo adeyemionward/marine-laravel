@@ -26,6 +26,16 @@ use App\Http\Controllers\Api\Settings\BackupManagementController;
 use App\Http\Controllers\Api\Settings\DatabaseMaintenanceController;
 use App\Http\Controllers\Api\KnowledgeBaseController;
 use App\Http\Controllers\Api\Settings\AppBrandingController;
+use App\Http\Controllers\Api\BannerPurchaseController;
+use App\Http\Controllers\Api\AdminMessagingController;
+use App\Http\Controllers\Api\CustomerSupplierController;
+use App\Http\Controllers\Api\EmailConfigurationController;
+use App\Http\Controllers\Api\ExpenseController;
+use App\Http\Controllers\Api\FinancialController;
+use App\Http\Controllers\Api\FinancialTransactionController;
+use App\Http\Controllers\Api\InvoiceUtilityController;
+use App\Http\Controllers\Api\Communication\NewsletterSettingsController;
+use App\Http\Controllers\Api\SystemMonitorController;
 use App\Models\EmailConfig;
 
 // Simple test route for debugging
@@ -545,12 +555,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
             // Newsletter Templates Management
             Route::prefix('newsletter-templates')->group(function () {
-                Route::get('/', [NewsletterTemplateController::class, 'index']);
-                Route::post('/', [NewsletterTemplateController::class, 'store']);
-                Route::get('/{id}', [NewsletterTemplateController::class, 'show']);
-                Route::put('/{id}', [NewsletterTemplateController::class, 'update']);
-                Route::delete('/{id}', [NewsletterTemplateController::class, 'destroy']);
-                Route::post('/{id}/duplicate', [NewsletterTemplateController::class, 'duplicate']);
+                Route::get('/', [NewsLetterTemplateController::class, 'index']);
+                Route::post('/', [NewsLetterTemplateController::class, 'store']);
+                Route::get('/{id}', [NewsLetterTemplateController::class, 'show']);
+                Route::put('/{id}', [NewsLetterTemplateController::class, 'update']);
+                Route::delete('/{id}', [NewsLetterTemplateController::class, 'destroy']);
+                Route::post('/{id}/duplicate', [NewsLetterTemplateController::class, 'duplicate']);
             });
         });
 

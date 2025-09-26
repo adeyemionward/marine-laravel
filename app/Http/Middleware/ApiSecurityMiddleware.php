@@ -25,12 +25,13 @@ class ApiSecurityMiddleware
      * Blocked user agents
      */
     protected array $blockedUserAgents = [
-        'bot',
-        'spider',
-        'crawl',
-        'scraper',
-        'wget',
-        'curl', // Be careful with this in production
+        'sqlmap',
+        'nikto',
+        'nessus',
+        'masscan',
+        'nmap',
+        // Removed common tools like curl, wget as they may be used legitimately
+        // 'bot', 'spider', 'crawl', 'scraper', 'wget', 'curl',
     ];
 
     /**
