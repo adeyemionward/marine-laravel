@@ -3,11 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Simple test route for debugging
-Route::get('/test', function () {
-    return response()->json(['message' => 'API routes working', 'timestamp' => now()]);
-});
-
+// Controller imports
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
@@ -15,24 +11,63 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\BannerController;
-use App\Http\Controllers\Api\BannerPurchaseController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\SellerController;
 use App\Http\Controllers\Api\CloudinaryController;
-use App\Http\Controllers\Api\Communication\NewsletterTemplateController;
+use App\Http\Controllers\Api\Communication\EmailConfigController;
 use App\Http\Controllers\Api\Communication\NewsLetterController;
-use App\Http\Controllers\Api\Communication\NewsletterSettingsController;
+use App\Http\Controllers\Api\Communication\NewsLetterTemplateController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\InquiryController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\Settings\BackupManagementController;
+use App\Http\Controllers\Api\Settings\DatabaseMaintenanceController;
 use App\Http\Controllers\Api\KnowledgeBaseController;
-use App\Http\Controllers\Api\EmailConfigurationController;
-use App\Http\Controllers\Api\FinancialTransactionController;
-use App\Http\Controllers\Api\SystemMonitorController;
-use App\Http\Controllers\Api\Communication\NewsletterSubscriberController;
+use App\Http\Controllers\Api\Settings\AppBrandingController;
 use App\Models\EmailConfig;
+
+// Simple test route for debugging
+Route::get('/test', function () {
+    return response()->json(['message' => 'API routes working', 'timestamp' => now()]);
+});
+
+// Debug conversations route
+Route::get('/debug-conversations', function () {
+    $conversations = \App\Models\Conversation::select('id', 'type', 'title', 'status', 'created_at')->get();
+    return response()->json([
+        'total_conversations' => $conversations->count(),
+        'conversations' => $conversations,
+        'types' => $conversations->pluck('type')->unique()->values()
+    ]);
+});
+
+// Test admin conversations without auth
+Route::get('/test-admin-conversations', function () {
+    $query = \App\Models\Conversation::with(['participants', 'messages' => function($q) {
+        $q->latest()->limit(1);
+    }]);
+
+    $conversations = $query->withCount('messages')
+    ->orderBy('updated_at', 'desc')
+    ->paginate(20);
+
+    return response()->json([
+        'success' => true,
+        'data' => $conversations
+    ]);
+});
+
+// Check messages table structure
+Route::get('/debug-messages', function () {
+    $messages = \App\Models\Message::first();
+    return response()->json([
+        'sample_message' => $messages,
+        'message_attributes' => $messages ? array_keys($messages->getAttributes()) : [],
+        'total_messages' => \App\Models\Message::count()
+    ]);
+});
 
 // Public routes
 Route::prefix('v1')->group(function () {
@@ -518,5 +553,38 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::post('/{id}/duplicate', [NewsletterTemplateController::class, 'duplicate']);
             });
         });
+
+         // System Settings
+        Route::group(['prefix' => '/settings', 'as' => 'settings.'], function () {
+            Route::group(['prefix' => '/backups', 'as' => 'backups.'], function () {
+                Route::get('/getBackups', [BackupManagementController::class, 'getBackups']);
+                Route::post('/createBackup', [BackupManagementController::class, 'createBackup']);
+                Route::get('/listTables', [BackupManagementController::class, 'listTables']);
+                Route::delete('/deleteBackup/{id}', [BackupManagementController::class, 'deleteBackup']);
+            });
+
+            Route::group(['prefix' => '/database', 'as' => 'database'], function () {
+                Route::get('/systemHealthOverview', [DatabaseMaintenanceController::class, 'systemHealthOverview']);
+                Route::get('/getMaintenanceLogs', [DatabaseMaintenanceController::class, 'getMaintenanceLogs']);
+                Route::get('/optimizeDatabase', [DatabaseMaintenanceController::class, 'optimizeDatabase']);
+                Route::get('/cleanupExpiredBanners', [DatabaseMaintenanceController::class, 'cleanupExpiredBanners']);
+                Route::get('/refreshMetrics', [DatabaseMaintenanceController::class, 'refreshMetrics']);
+                Route::get('/cleanupDatabase', [DatabaseMaintenanceController::class, 'cleanupDatabase']);
+                Route::get('/rebuildIndexes', [DatabaseMaintenanceController::class, 'rebuildIndexes']);
+            });
+            Route::group(['prefix' => '/branding', 'as' => 'branding.'], function () {
+                Route::get('/getAppName', [AppBrandingController::class, 'getAppName']);
+                Route::post('/updateAppName/store/', [AppBrandingController::class, 'updateAppName']);
+                Route::post('/logo/store', [AppBrandingController::class, 'uploadLogo']);
+                Route::post('/logo/reset', [AppBrandingController::class, 'resetLogo']);
+            });
+        });
+
+
     });
+});
+
+// Newsletter management routes (global access)
+Route::prefix('newsletters')->group(function () {
+    Route::post('/{id}/resend', [NewsLetterController::class, 'resend'])->name('newsletters.resend');
 });
