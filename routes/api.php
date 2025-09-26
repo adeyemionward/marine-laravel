@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\Settings\BackupManagementController;
 use App\Http\Controllers\Api\Settings\DatabaseMaintenanceController;
 use App\Http\Controllers\Api\KnowledgeBaseController;
+use App\Http\Controllers\Api\Settings\AppBrandingController;
 use App\Models\EmailConfig;
 
 // Simple test route for debugging
@@ -420,12 +421,11 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::get('/cleanupDatabase', [DatabaseMaintenanceController::class, 'cleanupDatabase']);
                 Route::get('/rebuildIndexes', [DatabaseMaintenanceController::class, 'rebuildIndexes']);
             });
-
-            Route::group(['prefix' => '/email-configs', 'as' => 'email-configs.'], function () {
-                Route::get('/', [EmailConfigController::class, 'index']);
-                Route::post('/store', [EmailConfigController::class, 'store']);
-                Route::get('/show/{id}', [EmailConfigController::class, 'show']);
-                Route::post('/test/{id}', [EmailConfigController::class, 'test']);
+            Route::group(['prefix' => '/branding', 'as' => 'branding.'], function () {
+                Route::get('/getAppName', [AppBrandingController::class, 'getAppName']);
+                Route::post('/updateAppName/store/', [AppBrandingController::class, 'updateAppName']);
+                Route::post('/logo/store', [AppBrandingController::class, 'uploadLogo']);
+                Route::post('/logo/reset', [AppBrandingController::class, 'resetLogo']);
             });
         });
 
