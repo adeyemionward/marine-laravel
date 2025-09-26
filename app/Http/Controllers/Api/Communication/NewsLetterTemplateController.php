@@ -7,7 +7,7 @@ use App\Models\NewsletterTemplate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
-class NewsLetterTemplateController extends Controller
+class NewsletterTemplateController extends Controller
 {
     public function index(Request $request)
     {

@@ -88,8 +88,8 @@ class EquipmentListingResource extends JsonResource
                     'rating' => $sellerProfile?->rating ?? 0,
                     'reviewCount' => $sellerProfile?->review_count ?? 0,
                     'stats' => [
-                        'totalListings' => $sellerProfile?->total_listings ?? $seller->listings()->where('status', 'active')->count(),
-                        'totalSales' => $seller->sales()->where('status', 'completed')->count(),
+                        'totalListings' => $sellerProfile?->total_listings ?? $seller->listings_count ?? 0,
+                        'totalSales' => $seller->sales_count ?? 0,
                         'responseTime' => $sellerProfile?->response_time ?? 'N/A',
                         'joinedDate' => $seller->created_at ? $seller->created_at->format('M Y') : 'N/A',
                         'lastSeen' => $seller->updated_at ? $seller->updated_at->diffForHumans() : 'Recently',

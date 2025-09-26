@@ -62,7 +62,7 @@ class AdminController extends Controller
     public function approveListing($id): JsonResponse
     {
         try {
-            $listing = EquipmentListing::findOrFail($id);
+            $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
             
             $listing->update([
                 'status' => 'active',
@@ -90,7 +90,7 @@ class AdminController extends Controller
                 'reason' => 'nullable|string|max:500',
             ]);
 
-            $listing = EquipmentListing::findOrFail($id);
+            $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
             
             $listing->update([
                 'status' => 'rejected',
@@ -113,7 +113,7 @@ class AdminController extends Controller
     public function featureListing($id): JsonResponse
     {
         try {
-            $listing = EquipmentListing::findOrFail($id);
+            $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
             
             $listing->update([
                 'is_featured' => !$listing->is_featured,
@@ -382,7 +382,7 @@ class AdminController extends Controller
             $user = User::findOrFail($id);
             
             // Prevent deleting admin users
-            if ($user->profile && $user->profile->role === 'admin') {
+            if ($user->isAdmin()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Cannot delete admin users',
@@ -507,7 +507,7 @@ class AdminController extends Controller
             $user = User::with('profile')->findOrFail($id);
             
             // Check if user is already a seller
-            if ($user->profile && $user->profile->role === 'seller') {
+            if ($user->isSeller()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'User is already a seller',
@@ -903,9 +903,6 @@ class AdminController extends Controller
                 'verified_at' => now(),
             ]);
         }
-
-        // Update user status
-        $user->update(['status' => 'active']);
     }
 
     /**
@@ -1837,11 +1834,11 @@ class AdminController extends Controller
             
             // Basic permissions based on role
             $permissions = [
-                'can_create_listings' => in_array($user->profile->role ?? 'user', ['seller', 'admin']),
+                'can_create_listings' => $user->isSeller() || $user->isAdmin(),
                 'can_message' => true,
                 'can_favorite' => true,
-                'is_admin' => $user->profile->role === 'admin',
-                'is_seller' => $user->profile->role === 'seller',
+                'is_admin' => $user->isAdmin(),
+                'is_seller' => $user->isSeller(),
             ];
 
             return response()->json([
@@ -2316,7 +2313,7 @@ class AdminController extends Controller
                 'reason' => 'nullable|string|max:500',
             ]);
 
-            $listing = EquipmentListing::findOrFail($id);
+            $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
             
             // Update listing status based on action
             switch ($validated['action']) {
@@ -2361,7 +2358,7 @@ class AdminController extends Controller
                 'reason' => 'nullable|string|max:500',
             ]);
 
-            $listing = EquipmentListing::findOrFail($id);
+            $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
             
             if ($listing->expires_at) {
                 $listing->expires_at = Carbon::parse($listing->expires_at)->addDays($validated['additional_days']);
@@ -2967,7 +2964,7 @@ class AdminController extends Controller
                 'transaction_reference' => 'INV-' . $invoice->invoice_number . '-' . time(),
                 'transaction_type' => 'income',
                 'category' => $this->getInvoiceCategory($invoice),
-                'amount' => $invoice->total,
+                'amount' => $invoice->total_amount,
                 'description' => "Payment received for Invoice #{$invoice->invoice_number}",
                 'notes' => "Invoice payment - " . ($invoice->description ?? 'Service Invoice'),
                 'transaction_date' => now(),
@@ -3055,7 +3052,7 @@ class AdminController extends Controller
                     'transaction_reference' => 'SYNC-INV-' . $invoice->invoice_number . '-' . $invoice->id,
                     'transaction_type' => 'income',
                     'category' => $this->getInvoiceCategory($invoice),
-                    'amount' => $invoice->total,
+                    'amount' => $invoice->total_amount,
                     'description' => "Payment received for Invoice #{$invoice->invoice_number} (Historical Sync)",
                     'notes' => "Historical invoice payment sync - " . ($invoice->description ?? 'Service Invoice'),
                     'transaction_date' => $invoice->paid_at ?? $invoice->updated_at,
@@ -3541,7 +3538,7 @@ class AdminController extends Controller
     public function deleteListing($id): JsonResponse
     {
         try {
-            $listing = EquipmentListing::findOrFail($id);
+            $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
 
             // Store listing details for response
             $listingData = [
@@ -3567,6 +3564,233 @@ class AdminController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete equipment listing',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get users by subscription plan
+     */
+    public function getUsersBySubscriptionPlan(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'plan_id' => 'required|exists:subscription_plans,id',
+                'status' => 'nullable|string|in:active,expired,cancelled',
+                'per_page' => 'nullable|integer|min:1|max:100'
+            ]);
+
+            $query = User::whereHas('subscriptions', function ($q) use ($validated) {
+                $q->where('plan_id', $validated['plan_id']);
+
+                if (isset($validated['status'])) {
+                    $q->where('status', $validated['status']);
+                }
+            })->with(['subscriptions' => function ($q) use ($validated) {
+                $q->where('plan_id', $validated['plan_id'])
+                  ->orderBy('created_at', 'desc');
+            }]);
+
+            $users = $query->paginate($validated['per_page'] ?? 20);
+
+            return response()->json([
+                'success' => true,
+                'data' => UserResource::collection($users),
+                'meta' => [
+                    'current_page' => $users->currentPage(),
+                    'per_page' => $users->perPage(),
+                    'total' => $users->total(),
+                    'last_page' => $users->lastPage(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch users by subscription plan',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get API keys for admin management
+     */
+    public function getApiKeys(): JsonResponse
+    {
+        try {
+            $apiKeys = DB::table('personal_access_tokens')
+                ->select(['id', 'name', 'tokenable_id', 'tokenable_type', 'abilities', 'last_used_at', 'created_at'])
+                ->where('tokenable_type', User::class)
+                ->orderBy('created_at', 'desc')
+                ->paginate(20);
+
+            return response()->json([
+                'success' => true,
+                'data' => $apiKeys->items(),
+                'meta' => [
+                    'current_page' => $apiKeys->currentPage(),
+                    'per_page' => $apiKeys->perPage(),
+                    'total' => $apiKeys->total(),
+                    'last_page' => $apiKeys->lastPage(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch API keys',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Create new API key for user
+     */
+    public function createApiKey(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'user_id' => 'required|exists:users,id',
+                'name' => 'required|string|max:255',
+                'abilities' => 'nullable|array',
+                'abilities.*' => 'string'
+            ]);
+
+            $user = User::findOrFail($validated['user_id']);
+            $abilities = $validated['abilities'] ?? ['*'];
+
+            $token = $user->createToken($validated['name'], $abilities);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'API key created successfully',
+                'data' => [
+                    'token' => $token->plainTextToken,
+                    'name' => $validated['name'],
+                    'abilities' => $abilities,
+                    'user_id' => $user->id,
+                    'created_at' => now()->toISOString()
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create API key',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Revoke API key
+     */
+    public function revokeApiKey(Request $request, $tokenId): JsonResponse
+    {
+        try {
+            $token = DB::table('personal_access_tokens')
+                ->where('id', $tokenId)
+                ->first();
+
+            if (!$token) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'API key not found'
+                ], 404);
+            }
+
+            DB::table('personal_access_tokens')
+                ->where('id', $tokenId)
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'API key revoked successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to revoke API key',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get branding settings
+     */
+    public function getBrandingSettings(): JsonResponse
+    {
+        try {
+            $brandingSettings = [
+                'site_name' => SystemSetting::getValue('site_name', 'Marine.ng'),
+                'site_logo' => SystemSetting::getValue('site_logo', ''),
+                'site_favicon' => SystemSetting::getValue('site_favicon', ''),
+                'primary_color' => SystemSetting::getValue('primary_color', '#1e40af'),
+                'secondary_color' => SystemSetting::getValue('secondary_color', '#64748b'),
+                'footer_text' => SystemSetting::getValue('footer_text', ''),
+                'contact_email' => SystemSetting::getValue('contact_email', 'contact@marine.ng'),
+                'support_phone' => SystemSetting::getValue('support_phone', ''),
+                'social_facebook' => SystemSetting::getValue('social_facebook', ''),
+                'social_twitter' => SystemSetting::getValue('social_twitter', ''),
+                'social_instagram' => SystemSetting::getValue('social_instagram', ''),
+                'social_linkedin' => SystemSetting::getValue('social_linkedin', ''),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $brandingSettings
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch branding settings',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Update branding settings
+     */
+    public function updateBrandingSettings(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'site_name' => 'nullable|string|max:255',
+                'site_logo' => 'nullable|string|max:500',
+                'site_favicon' => 'nullable|string|max:500',
+                'primary_color' => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
+                'secondary_color' => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
+                'footer_text' => 'nullable|string|max:1000',
+                'contact_email' => 'nullable|email|max:255',
+                'support_phone' => 'nullable|string|max:20',
+                'social_facebook' => 'nullable|url|max:255',
+                'social_twitter' => 'nullable|url|max:255',
+                'social_instagram' => 'nullable|url|max:255',
+                'social_linkedin' => 'nullable|url|max:255',
+            ]);
+
+            DB::transaction(function () use ($validated) {
+                foreach ($validated as $key => $value) {
+                    if ($value !== null) {
+                        SystemSetting::updateOrCreate(
+                            ['key' => $key],
+                            ['value' => $value, 'updated_at' => now()]
+                        );
+                    }
+                }
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Branding settings updated successfully',
+                'data' => $validated
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update branding settings',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }

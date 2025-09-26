@@ -22,6 +22,15 @@ class UserResource extends JsonResource
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'profile' => new UserProfileResource($this->whenLoaded('profile')),
+            'role' => $this->whenLoaded('role', function () {
+                return [
+                    'id' => $this->role->id,
+                    'name' => $this->role->name,
+                    'display_name' => $this->role->display_name ?? $this->role->name,
+                ];
+            }),
+            'is_seller' => $this->isSeller(),
+            'seller_profile' => $this->whenLoaded('sellerProfile'),
             'subscriptions' => $this->whenLoaded('subscriptions'),
             'subscription' => $this->when(
                 $this->relationLoaded('subscriptions'),

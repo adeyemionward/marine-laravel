@@ -20,6 +20,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Query Logging Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for database query logging and performance monitoring.
+    |
+    */
+
+    'log_slow_queries' => env('DB_LOG_SLOW_QUERIES', false),
+    'slow_query_threshold' => env('DB_SLOW_QUERY_THRESHOLD', 2000), // milliseconds
+
+    /*
+    |--------------------------------------------------------------------------
     | Database Connections
     |--------------------------------------------------------------------------
     |

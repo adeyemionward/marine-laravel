@@ -571,4 +571,58 @@ class SystemMonitorController extends Controller
         }
         return 'info';
     }
+
+    /**
+     * Record Web Vitals metrics from frontend
+     */
+    public function recordWebVitals(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'metrics' => 'required|array',
+                'metrics.*.name' => 'required|string|in:CLS,FID,FCP,LCP,TTFB',
+                'metrics.*.value' => 'required|numeric|min:0',
+                'metrics.*.delta' => 'nullable|numeric',
+                'url' => 'nullable|string|max:2048',
+                'user_agent' => 'nullable|string|max:1000',
+                'timestamp' => 'nullable|date',
+            ]);
+
+            foreach ($validated['metrics'] as $metric) {
+                // Log web vitals for analysis
+                \App\Services\LoggingService::logPerformance(
+                    "web_vitals_{$metric['name']}",
+                    $metric['value'] / 1000, // Convert to seconds
+                    [
+                        'metric_name' => $metric['name'],
+                        'metric_value' => $metric['value'],
+                        'delta' => $metric['delta'] ?? null,
+                        'url' => $validated['url'] ?? $request->header('Referer'),
+                        'user_agent' => $validated['user_agent'] ?? $request->userAgent(),
+                        'ip_address' => $request->ip(),
+                        'timestamp' => $validated['timestamp'] ?? now()->toISOString(),
+                    ]
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Web vitals recorded successfully',
+                'recorded_metrics' => count($validated['metrics'])
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid web vitals data',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to record web vitals',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

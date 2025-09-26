@@ -8,9 +8,12 @@ use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Models\Payment;
+use App\Notifications\SubscriptionActivatedNotification;
+use App\Notifications\SubscriptionExpiredNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 class InvoiceWorkflowService
 {
@@ -368,11 +371,24 @@ class InvoiceWorkflowService
      */
     private function sendSubscriptionActivatedNotification(Subscription $subscription): void
     {
-        // TODO: Implement email/SMS notification
-        Log::info('Subscription activated notification sent', [
-            'subscription_id' => $subscription->id,
-            'user_id' => $subscription->user_id,
-        ]);
+        try {
+            $user = $subscription->user;
+            $plan = $subscription->plan;
+
+            // Send email notification
+            $user->notify(new SubscriptionActivatedNotification($subscription, $plan));
+
+            Log::info('Subscription activated notification sent', [
+                'subscription_id' => $subscription->id,
+                'user_id' => $subscription->user_id,
+                'email' => $user->email
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send subscription activated notification', [
+                'subscription_id' => $subscription->id,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**
@@ -380,11 +396,24 @@ class InvoiceWorkflowService
      */
     private function sendSubscriptionExpiredNotification(Subscription $subscription): void
     {
-        // TODO: Implement email/SMS notification
-        Log::info('Subscription expired notification sent', [
-            'subscription_id' => $subscription->id,
-            'user_id' => $subscription->user_id,
-        ]);
+        try {
+            $user = $subscription->user;
+            $plan = $subscription->plan;
+
+            // Send email notification
+            $user->notify(new SubscriptionExpiredNotification($subscription, $plan));
+
+            Log::info('Subscription expired notification sent', [
+                'subscription_id' => $subscription->id,
+                'user_id' => $subscription->user_id,
+                'email' => $user->email
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send subscription expired notification', [
+                'subscription_id' => $subscription->id,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**

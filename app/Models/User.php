@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -11,8 +11,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Support\Facades\DB;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasApiTokens;
@@ -111,10 +112,11 @@ class User extends Authenticatable
 
     /**
      * Check if user is a seller.
+     * NEW RULE: Users can only be sellers if they have both the seller role AND a seller profile.
      */
     public function isSeller(): bool
     {
-        return $this->hasRole('seller');
+        return $this->hasRole('seller') && $this->sellerProfile()->exists();
     }
 
     /**
@@ -205,5 +207,59 @@ class User extends Authenticatable
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    /**
+     * Promote user to seller by creating seller profile and updating role.
+     * This is the ONLY way a user should become a seller.
+     */
+    public function promoteToSeller(array $sellerData = []): bool
+    {
+        try {
+            DB::transaction(function () use ($sellerData) {
+                // Create seller profile first
+                $this->sellerProfile()->create(array_merge([
+                    'business_name' => $this->name,
+                    'business_type' => 'Individual',
+                    'verification_status' => 'pending',
+                    'status' => 'active',
+                ], $sellerData));
+
+                // Then update role
+                $sellerRole = Role::where('name', 'seller')->first();
+                if ($sellerRole) {
+                    $this->update(['role_id' => $sellerRole->id]);
+                }
+            });
+
+            return true;
+        } catch (\Exception $e) {
+            \Log::error('Failed to promote user to seller: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Demote seller to regular user by removing seller profile and updating role.
+     */
+    public function demoteFromSeller(): bool
+    {
+        try {
+            DB::transaction(function () {
+                // Delete seller profile first
+                $this->sellerProfile()->delete();
+
+                // Then update role
+                $userRole = Role::where('name', 'user')->first();
+                if ($userRole) {
+                    $this->update(['role_id' => $userRole->id]);
+                }
+            });
+
+            return true;
+        } catch (\Exception $e) {
+            \Log::error('Failed to demote seller to user: ' . $e->getMessage());
+            return false;
+        }
     }
 }

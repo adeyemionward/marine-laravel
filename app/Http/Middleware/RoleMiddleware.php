@@ -27,9 +27,9 @@ class RoleMiddleware
         }
 
         $user = Auth::user();
-        
-        // Get user role from profile or direct relationship
-        $userRole = $user->profile?->role?->value ?? $user->role?->name ?? null;
+
+        // Use the User model's role relationship
+        $userRole = $user->getRoleName();
         
         // If no roles specified, just check if authenticated
         if (empty($roles)) {

@@ -6,7 +6,11 @@ use App\Models\Banner;
 use App\Models\BannerPricing;
 use App\Models\Payment;
 use App\Models\User;
+use App\Notifications\BannerApprovalRequiredNotification;
+use App\Notifications\BannerPaymentConfirmedNotification;
+use App\Notifications\BannerRejectedNotification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
@@ -121,11 +125,11 @@ class BannerService
 
             // Send notification to admin for approval if needed
             if (!$banner->auto_approve) {
-                // TODO: Send admin notification
+                $this->sendAdminApprovalNotification($banner);
             }
 
             // Send confirmation email to purchaser
-            // TODO: Send confirmation email
+            $this->sendPaymentConfirmationNotification($banner);
 
             return true;
         });
@@ -153,8 +157,13 @@ class BannerService
             'admin_notes' => "Rejected by {$admin->name}: {$reason}",
         ]);
 
-        // TODO: Process refund if payment was completed
-        // TODO: Send rejection notification
+        // Process refund if payment was completed
+        if ($banner->isPaid()) {
+            $this->processRefund($banner);
+        }
+
+        // Send rejection notification
+        $this->sendRejectionNotification($banner, $reason);
 
         return true;
     }
@@ -211,5 +220,118 @@ class BannerService
         };
 
         return $isPremium ? $basePriority + 10 : $basePriority;
+    }
+
+    /**
+     * Send admin notification for banner approval
+     */
+    private function sendAdminApprovalNotification(Banner $banner): void
+    {
+        try {
+            // Get all admin users
+            $admins = User::whereHas('role', function ($query) {
+                $query->where('name', 'admin');
+            })->get();
+
+            // Notify all admins
+            Notification::send($admins, new BannerApprovalRequiredNotification($banner));
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to send admin approval notification', [
+                'banner_id' => $banner->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Send payment confirmation notification to purchaser
+     */
+    private function sendPaymentConfirmationNotification(Banner $banner): void
+    {
+        try {
+            $purchaser = $banner->purchaser;
+            $purchaser->notify(new BannerPaymentConfirmedNotification($banner));
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to send payment confirmation notification', [
+                'banner_id' => $banner->id,
+                'purchaser_id' => $banner->purchaser_id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Send rejection notification to purchaser
+     */
+    private function sendRejectionNotification(Banner $banner, string $reason): void
+    {
+        try {
+            $purchaser = $banner->purchaser;
+            $purchaser->notify(new BannerRejectedNotification($banner, $reason));
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to send rejection notification', [
+                'banner_id' => $banner->id,
+                'purchaser_id' => $banner->purchaser_id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Process refund for rejected banner
+     */
+    private function processRefund(Banner $banner): void
+    {
+        try {
+            // Find the payment
+            $payment = Payment::where('payable_type', Banner::class)
+                ->where('payable_id', $banner->id)
+                ->where('status', 'completed')
+                ->first();
+
+            if (!$payment) {
+                \Log::warning('No payment found for banner refund', ['banner_id' => $banner->id]);
+                return;
+            }
+
+            // Process refund through payment gateway
+            $refundResult = $this->paymentGateway->processRefund($payment, $banner->purchase_price, 'Banner rejected by admin');
+
+            if ($refundResult['success']) {
+                // Update payment status
+                $payment->update([
+                    'status' => 'refunded',
+                    'refund_reference' => $refundResult['refund_reference'],
+                    'refunded_at' => now()
+                ]);
+
+                // Update banner
+                $banner->update([
+                    'purchase_status' => 'refunded',
+                    'refund_reference' => $refundResult['refund_reference']
+                ]);
+
+                \Log::info('Banner refund processed successfully', [
+                    'banner_id' => $banner->id,
+                    'payment_id' => $payment->id,
+                    'refund_reference' => $refundResult['refund_reference']
+                ]);
+            } else {
+                \Log::error('Failed to process banner refund', [
+                    'banner_id' => $banner->id,
+                    'payment_id' => $payment->id,
+                    'error' => $refundResult['error'] ?? 'Unknown error'
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Exception while processing banner refund', [
+                'banner_id' => $banner->id,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }

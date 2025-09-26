@@ -1,0 +1,604 @@
+<?php
+
+namespace App\Http\Controllers\Api\Communication;
+
+use App\Http\Controllers\Controller;
+use App\Models\Newsletter;
+use App\Models\NewsletterTemplate;
+use App\Models\NewsletterSubscriber;
+use App\Models\EquipmentListing;
+use App\Models\User;
+use App\Models\EmailSetting;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+
+class NewsletterController extends Controller
+{
+    public function index(Request $request)
+    {
+        $query = Newsletter::with('template');
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $newsletters = $query->orderBy('created_at', 'desc')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $newsletters,
+            'stats' => [
+                'total' => Newsletter::count(),
+                'draft' => Newsletter::where('status', 'draft')->count(),
+                'scheduled' => Newsletter::where('status', 'scheduled')->count(),
+                'sent' => Newsletter::where('status', 'sent')->count(),
+            ]
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'subject' => 'required|string|max:255',
+            'content' => 'required|string',
+            'excerpt' => 'nullable|string',
+            'template_id' => 'nullable|exists:newsletter_templates,id',
+            'scheduled_at' => 'nullable|date|after:now',
+            'tags' => 'nullable|array',
+            'status' => 'sometimes|in:draft,scheduled',
+            'recipient_list' => 'nullable|string'
+        ]);
+
+        if (isset($validated['scheduled_at'])) {
+            $validated['status'] = 'scheduled';
+        } else {
+            $validated['status'] = 'draft';
+        }
+
+        // Add created_by field
+        $validated['created_by'] = Auth::user()->id ?? null;
+
+        $newsletter = Newsletter::create($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Newsletter created successfully',
+            'data' => $newsletter->load('template'),
+        ], 201);
+    }
+
+    public function show($id)
+    {
+        $newsletter = Newsletter::with('template')->findOrFail($id);
+        return response()->json([
+            'success' => true,
+            'data' => $newsletter
+        ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $newsletter = Newsletter::findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => 'sometimes|string|max:255',
+            'subject' => 'sometimes|string|max:255',
+            'content' => 'sometimes|string',
+            'excerpt' => 'nullable|string',
+            'template_id' => 'nullable|exists:newsletter_templates,id',
+            'scheduled_at' => 'nullable|date|after:now',
+            'tags' => 'nullable|array',
+            'status' => 'sometimes|in:draft,scheduled',
+            'recipient_list' => 'nullable|string'
+        ]);
+
+        if (isset($validated['scheduled_at']) && $newsletter->status !== 'sent') {
+            $validated['status'] = 'scheduled';
+        }
+
+        $newsletter->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Newsletter updated successfully',
+            'data' => $newsletter->load('template'),
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $newsletter = Newsletter::findOrFail($id);
+
+        if ($newsletter->status === 'sent') {
+            return response()->json([
+                'message' => 'Cannot delete a newsletter that has already been sent'
+            ], 422);
+        }
+
+        $newsletter->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Newsletter deleted successfully'
+        ]);
+    }
+
+    public function send(Request $request, $id)
+    {
+        $newsletter = Newsletter::findOrFail($id);
+
+        if ($newsletter->status === 'sent') {
+            return response()->json([
+                'message' => 'Newsletter has already been sent'
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'test_email' => 'nullable|email',
+        ]);
+
+        // Configure email settings
+        if (!$this->configureMailer()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email configuration not set up. Please configure email settings first.'
+            ], 422);
+        }
+
+        if (isset($validated['test_email'])) {
+            try {
+                // Send test email
+                Mail::html($newsletter->content, function ($message) use ($newsletter, $validated) {
+                    $message->to($validated['test_email'])
+                           ->subject('[TEST] ' . $newsletter->subject);
+                });
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Test email sent successfully'
+                ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'message' => 'Failed to send test email: ' . $e->getMessage()
+                ], 500);
+            }
+        } else {
+            try {
+                // Get all active subscribers
+                $subscribers = NewsletterSubscriber::active()->get();
+                $sentCount = 0;
+                $failedCount = 0;
+
+                foreach ($subscribers as $subscriber) {
+                    try {
+                        Mail::html($newsletter->content, function ($message) use ($newsletter, $subscriber) {
+                            $message->to($subscriber->email, $subscriber->name)
+                                   ->subject($newsletter->subject);
+                        });
+                        $sentCount++;
+                    } catch (\Exception $e) {
+                        $failedCount++;
+                        Log::error('Failed to send newsletter to subscriber ' . $subscriber->id . ': ' . $e->getMessage());
+                    }
+                }
+
+                $newsletter->update([
+                    'status' => 'sent',
+                    'sent_at' => now(),
+                    'recipient_count' => $sentCount,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => "Newsletter sent successfully to {$sentCount} subscribers" .
+                                ($failedCount > 0 ? " ({$failedCount} failed)" : "")
+                ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to send newsletter',
+                    'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+                ], 500);
+            }
+        }
+    }
+
+    public function duplicate($id)
+    {
+        $newsletter = Newsletter::findOrFail($id);
+
+        $duplicate = Newsletter::create([
+            'title' => $newsletter->title . ' (Copy)',
+            'content' => $newsletter->content,
+            'excerpt' => $newsletter->excerpt,
+            'template_id' => $newsletter->template_id,
+            'tags' => $newsletter->tags,
+            'status' => 'draft',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Newsletter duplicated successfully',
+            'data' => $duplicate->load('template'),
+        ], 201);
+    }
+
+    public function getStats()
+    {
+        $stats = [
+            'total_newsletters' => Newsletter::count(),
+            'total_recipients' => NewsletterSubscriber::active()->count(),
+            'emails_sent' => Newsletter::where('status', 'sent')->sum('recipient_count'),
+            'failed' => Newsletter::where('status', 'failed')->count(),
+            'draft' => Newsletter::where('status', 'draft')->count(),
+            'scheduled' => Newsletter::where('status', 'scheduled')->count(),
+            'sent' => Newsletter::where('status', 'sent')->count(),
+            'active_subscribers' => NewsletterSubscriber::active()->count(),
+            'total_subscribers' => NewsletterSubscriber::count(),
+            'unsubscribed' => NewsletterSubscriber::where('status', 'unsubscribed')->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats
+        ]);
+    }
+
+    public function getTemplates()
+    {
+        $templates = NewsletterTemplate::where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $templates
+        ]);
+    }
+
+    public function getSettings()
+    {
+        // Return default newsletter settings
+        $settings = [
+            'auto_send' => true,
+            'frequency' => 'monthly',
+            'day_of_week' => 'tuesday',
+            'send_time' => '09:00',
+            'default_from_name' => 'Marine.ng',
+            'default_from_email' => 'newsletter@marine.ng',
+            'unsubscribe_link' => true,
+            'track_opens' => true,
+            'track_clicks' => true
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $settings
+        ]);
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'auto_send' => 'boolean',
+            'frequency' => 'in:daily,weekly,monthly',
+            'day_of_week' => 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
+            'send_time' => 'date_format:H:i',
+            'default_from_name' => 'string|max:255',
+            'default_from_email' => 'email|max:255',
+            'unsubscribe_link' => 'boolean',
+            'track_opens' => 'boolean',
+            'track_clicks' => 'boolean'
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Settings updated successfully'
+        ]);
+    }
+
+    public function getFeaturedListings(Request $request)
+    {
+        $query = EquipmentListing::with(['user', 'category', 'images'])
+            ->where('status', 'approved')
+            ->where('is_featured', true);
+
+        // Optional filters
+        if ($request->has('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+
+        if ($request->has('location')) {
+            $query->where('location', 'LIKE', '%' . $request->location . '%');
+        }
+
+        // Date range filter
+        if ($request->has('date_from')) {
+            $query->where('featured_until', '>=', $request->date_from);
+        }
+
+        if ($request->has('date_to')) {
+            $query->where('featured_until', '<=', $request->date_to);
+        }
+
+        $listings = $query->orderBy('featured_until', 'desc')
+            ->limit($request->get('limit', 20))
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $listings,
+            'count' => $listings->count()
+        ]);
+    }
+
+    public function createPromotionalNewsletter(Request $request)
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'subject' => 'required|string|max:255',
+            'promotional_text' => 'required|string',
+            'featured_listing_ids' => 'required|array|min:1',
+            'featured_listing_ids.*' => 'exists:equipment_listings,id',
+            'template_id' => 'nullable|exists:newsletter_templates,id',
+            'scheduled_at' => 'nullable|date|after:now',
+            'send_to_all_users' => 'boolean'
+        ]);
+
+        try {
+            // Get the selected featured listings
+            $featuredListings = EquipmentListing::with(['user', 'category', 'images'])
+                ->whereIn('id', $validated['featured_listing_ids'])
+                ->where('is_featured', true)
+                ->where('status', 'approved')
+                ->get();
+
+            if ($featuredListings->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No valid featured listings found'
+                ], 400);
+            }
+
+            // Generate HTML content for the promotional newsletter
+            $htmlContent = $this->generatePromotionalContent(
+                $validated['promotional_text'],
+                $featuredListings
+            );
+
+            // Create the newsletter
+            $newsletter = Newsletter::create([
+                'title' => $validated['title'],
+                'subject' => $validated['subject'],
+                'content' => $htmlContent,
+                'excerpt' => substr(strip_tags($validated['promotional_text']), 0, 200),
+                'template_id' => $validated['template_id'] ?? null,
+                'scheduled_at' => $validated['scheduled_at'] ?? null,
+                'status' => isset($validated['scheduled_at']) ? 'scheduled' : 'draft',
+                'created_by' => Auth::id(),
+                'template_data' => [
+                    'promotional_text' => $validated['promotional_text'],
+                    'featured_listings' => $featuredListings->toArray(),
+                    'send_to_all_users' => $validated['send_to_all_users'] ?? true
+                ]
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Promotional newsletter created successfully',
+                'data' => $newsletter->load('template')
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create promotional newsletter',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    private function generatePromotionalContent($promotionalText, $featuredListings)
+    {
+        $content = '<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">';
+
+        // Header
+        $content .= '<div style="background: #1f2937; padding: 20px; text-align: center;">';
+        $content .= '<h1 style="color: white; margin: 0;">Marine.ng Featured Listings</h1>';
+        $content .= '</div>';
+
+        // Promotional text
+        $content .= '<div style="padding: 30px 20px; background: #f8fafc;">';
+        $content .= '<div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 30px;">';
+        $content .= '<p style="font-size: 16px; line-height: 1.6; color: #374151; margin: 0;">' . nl2br(htmlspecialchars($promotionalText)) . '</p>';
+        $content .= '</div>';
+
+        // Featured listings
+        $content .= '<h2 style="color: #1f2937; margin-bottom: 20px;">Featured Equipment</h2>';
+
+        foreach ($featuredListings as $listing) {
+            $content .= '<div style="background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
+
+            // Image
+            if ($listing->images && $listing->images->count() > 0) {
+                $imageUrl = $listing->images->first()->image_url ?? $listing->images->first()->url;
+                $content .= '<img src="' . $imageUrl . '" alt="' . htmlspecialchars($listing->title) . '" style="width: 100%; height: 200px; object-fit: cover; border-radius: 6px; margin-bottom: 15px;">';
+            }
+
+            // Title and price
+            $content .= '<h3 style="color: #1f2937; margin: 0 0 10px 0; font-size: 18px;">' . htmlspecialchars($listing->title) . '</h3>';
+            $content .= '<p style="color: #059669; font-size: 20px; font-weight: bold; margin: 0 0 10px 0;">₦' . number_format($listing->price, 2) . '</p>';
+
+            // Description
+            if ($listing->description) {
+                $shortDescription = substr(strip_tags($listing->description), 0, 150) . '...';
+                $content .= '<p style="color: #6b7280; margin: 0 0 15px 0;">' . htmlspecialchars($shortDescription) . '</p>';
+            }
+
+            // Location and category
+            $content .= '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">';
+            $content .= '<span style="color: #6b7280; font-size: 14px;"><strong>Location:</strong> ' . htmlspecialchars($listing->location ?? 'Not specified') . '</span>';
+            if ($listing->category) {
+                $content .= '<span style="color: #6b7280; font-size: 14px;"><strong>Category:</strong> ' . htmlspecialchars($listing->category->name) . '</span>';
+            }
+            $content .= '</div>';
+
+            // CTA Button
+            $listingUrl = config('app.frontend_url', 'https://marine.ng') . '/equipment/' . $listing->id;
+            $content .= '<a href="' . $listingUrl . '" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Details</a>';
+
+            $content .= '</div>';
+        }
+
+        // Footer
+        $content .= '<div style="text-align: center; padding: 20px; color: #6b7280; font-size: 14px;">';
+        $content .= '<p>Visit <a href="' . config('app.frontend_url', 'https://marine.ng') . '" style="color: #3b82f6;">Marine.ng</a> for more equipment listings</p>';
+        $content .= '<p style="font-size: 12px; margin-top: 10px;">You received this email because you are registered on Marine.ng</p>';
+        $content .= '</div>';
+
+        $content .= '</div></div>';
+
+        return $content;
+    }
+
+    public function sendToAllUsers(Request $request, $id)
+    {
+        $newsletter = Newsletter::findOrFail($id);
+
+        if ($newsletter->status === 'sent') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Newsletter has already been sent'
+            ], 422);
+        }
+
+        // Configure email settings
+        if (!$this->configureMailer()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email configuration not set up. Please configure email settings first.'
+            ], 422);
+        }
+
+        try {
+            // Get all active users (not just newsletter subscribers)
+            $users = User::where('email_verified_at', '!=', null)
+                ->whereNotNull('email')
+                ->get();
+
+            $sentCount = 0;
+            $failedCount = 0;
+
+            foreach ($users as $user) {
+                try {
+                    Mail::html($newsletter->content, function ($message) use ($newsletter, $user) {
+                        $message->to($user->email, $user->name)
+                               ->subject($newsletter->subject);
+                    });
+                    $sentCount++;
+                } catch (\Exception $e) {
+                    $failedCount++;
+                    Log::error('Failed to send newsletter to user ' . $user->id . ': ' . $e->getMessage());
+                }
+            }
+
+            $newsletter->update([
+                'status' => 'sent',
+                'sent_at' => now(),
+                'recipient_count' => $sentCount,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Newsletter sent successfully to {$sentCount} users" . ($failedCount > 0 ? " ({$failedCount} failed)" : ""),
+                'data' => [
+                    'sent_count' => $sentCount,
+                    'failed_count' => $failedCount,
+                    'total_users' => $users->count()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send newsletter',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Configure the mail system with the active email settings
+     */
+    private function configureMailer()
+    {
+        try {
+            // Get active email settings
+            $emailSettings = EmailSetting::where('is_active', true)->first();
+
+            if (!$emailSettings) {
+                // Fall back to .env configuration if no active settings
+                $envHost = config('mail.default') === 'smtp' ? config('mail.mailers.smtp.host') : null;
+                $envUsername = config('mail.default') === 'smtp' ? config('mail.mailers.smtp.username') : null;
+                $envFromAddress = config('mail.from.address');
+
+                if ($envHost && $envUsername && $envFromAddress) {
+                    Log::info('Using .env mail configuration as fallback');
+                    return true; // Use default .env configuration
+                }
+
+                Log::error('No active email settings found and .env configuration incomplete', [
+                    'env_host' => $envHost,
+                    'env_username' => $envUsername,
+                    'env_from_address' => $envFromAddress
+                ]);
+                return false;
+            }
+
+            // Validate email settings
+            if (empty($emailSettings->host) || empty($emailSettings->username) || empty($emailSettings->from_email)) {
+                Log::error('Email settings incomplete', [
+                    'host' => $emailSettings->host,
+                    'username' => $emailSettings->username,
+                    'from_email' => $emailSettings->from_email
+                ]);
+                return false;
+            }
+
+            // Configure the mail system dynamically
+            config([
+                'mail.default' => 'dynamic',
+                'mail.mailers.dynamic' => [
+                    'transport' => 'smtp',
+                    'host' => $emailSettings->host,
+                    'port' => $emailSettings->port,
+                    'encryption' => $emailSettings->encryption,
+                    'username' => $emailSettings->username,
+                    'password' => $emailSettings->password,
+                    'timeout' => null,
+                    'local_domain' => env('MAIL_EHLO_DOMAIN'),
+                ],
+                'mail.from' => [
+                    'address' => $emailSettings->from_email,
+                    'name' => $emailSettings->from_name,
+                ],
+            ]);
+
+            // Set the default mailer to our dynamic configuration
+            Mail::setDefaultDriver('dynamic');
+
+            Log::info('Email configuration loaded successfully', [
+                'host' => $emailSettings->host,
+                'from_email' => $emailSettings->from_email
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Failed to configure mailer: ' . $e->getMessage());
+            return false;
+        }
+    }
+}

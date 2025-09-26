@@ -210,12 +210,18 @@ class EmailConfigurationController extends Controller
                 ],
             ]);
 
-            // Send test email
-            Mail::mailer('test_smtp')->send('emails.test', [], function ($message) use ($testEmail, $config) {
-                $message->to($testEmail)
-                    ->subject('SMTP Configuration Test - Marine.ng')
-                    ->from($config['from_email'], $config['from_name']);
-            });
+            // Send test email with better error handling
+            try {
+                Mail::mailer('test_smtp')->send('emails.test', [], function ($message) use ($testEmail, $config) {
+                    $message->to($testEmail)
+                        ->subject('SMTP Configuration Test - Marine.ng')
+                        ->from($config['from_email'], $config['from_name']);
+                });
+            } catch (\Swift_TransportException $e) {
+                throw new \Exception('SMTP Connection Failed: ' . $e->getMessage() . '. Please check your network connection and SMTP settings.');
+            } catch (\Exception $e) {
+                throw new \Exception('Email sending failed: ' . $e->getMessage());
+            }
 
             // Update test results if settings exist
             if ($request->filled('settings_id')) {
@@ -241,10 +247,27 @@ class EmailConfigurationController extends Controller
                 }
             }
 
+            $errorMessage = $e->getMessage();
+            $suggestions = [];
+
+            // Provide specific suggestions based on error type
+            if (strpos($errorMessage, 'Connection could not be established') !== false) {
+                $suggestions[] = 'Check if your server can make outgoing connections on port 587';
+                $suggestions[] = 'Verify your firewall settings allow SMTP connections';
+                $suggestions[] = 'Try using port 465 with SSL instead of port 587 with TLS';
+            }
+
+            if (strpos($errorMessage, 'gmail.com') !== false) {
+                $suggestions[] = 'Ensure 2-Factor Authentication is enabled in your Gmail account';
+                $suggestions[] = 'Use an App Password instead of your regular Gmail password';
+                $suggestions[] = 'Check if "Less secure app access" is enabled (not recommended)';
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Test email failed',
-                'error' => $e->getMessage(),
+                'error' => $errorMessage,
+                'suggestions' => $suggestions
             ], 422);
         }
     }
@@ -292,6 +315,122 @@ class EmailConfigurationController extends Controller
                 'message' => 'Failed to delete email configuration',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    public function test($id, Request $request): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'test_email' => 'required|email',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            $settings = EmailSetting::findOrFail($id);
+            $testEmail = $request->test_email;
+
+            $config = [
+                'driver' => $settings->driver,
+                'host' => $settings->host,
+                'port' => $settings->port,
+                'username' => $settings->username,
+                'password' => $settings->password,
+                'encryption' => $settings->encryption,
+                'from_email' => $settings->from_email,
+                'from_name' => $settings->from_name,
+            ];
+
+            // Set default host and port for predefined drivers
+            if ($config['driver'] === 'gmail') {
+                $config['host'] = 'smtp.gmail.com';
+                $config['port'] = 587;
+                $config['encryption'] = 'tls';
+            } elseif ($config['driver'] === 'outlook') {
+                $config['host'] = 'smtp-mail.outlook.com';
+                $config['port'] = 587;
+                $config['encryption'] = 'tls';
+            }
+
+            // Configure mail for testing
+            config([
+                'mail.mailers.test_smtp' => [
+                    'transport' => 'smtp',
+                    'host' => $config['host'],
+                    'port' => $config['port'],
+                    'encryption' => $config['encryption'],
+                    'username' => $config['username'],
+                    'password' => $config['password'],
+                    'timeout' => null,
+                    'local_domain' => env('MAIL_EHLO_DOMAIN'),
+                ],
+                'mail.from' => [
+                    'address' => $config['from_email'],
+                    'name' => $config['from_name'],
+                ],
+            ]);
+
+            // Send test email with better error handling
+            try {
+                Mail::mailer('test_smtp')->send('emails.test', [], function ($message) use ($testEmail, $config) {
+                    $message->to($testEmail)
+                        ->subject('SMTP Configuration Test - Marine.ng')
+                        ->from($config['from_email'], $config['from_name']);
+                });
+            } catch (\Swift_TransportException $e) {
+                throw new \Exception('SMTP Connection Failed: ' . $e->getMessage() . '. Please check your network connection and SMTP settings.');
+            } catch (\Exception $e) {
+                throw new \Exception('Email sending failed: ' . $e->getMessage());
+            }
+
+            // Update test results
+            $settings->update([
+                'tested_at' => now(),
+                'test_result' => 'success',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Test email sent successfully',
+            ]);
+        } catch (\Exception $e) {
+            // Update test results
+            $settings = EmailSetting::find($id);
+            if ($settings) {
+                $settings->update([
+                    'tested_at' => now(),
+                    'test_result' => 'failed: ' . $e->getMessage(),
+                ]);
+            }
+
+            $errorMessage = $e->getMessage();
+            $suggestions = [];
+
+            // Provide specific suggestions based on error type
+            if (strpos($errorMessage, 'Connection could not be established') !== false) {
+                $suggestions[] = 'Check if your server can make outgoing connections on port 587';
+                $suggestions[] = 'Verify your firewall settings allow SMTP connections';
+                $suggestions[] = 'Try using port 465 with SSL instead of port 587 with TLS';
+            }
+
+            if (strpos($errorMessage, 'gmail.com') !== false) {
+                $suggestions[] = 'Ensure 2-Factor Authentication is enabled in your Gmail account';
+                $suggestions[] = 'Use an App Password instead of your regular Gmail password';
+                $suggestions[] = 'Check if "Less secure app access" is enabled (not recommended)';
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Test email failed',
+                'error' => $errorMessage,
+                'suggestions' => $suggestions
+            ], 422);
         }
     }
 }

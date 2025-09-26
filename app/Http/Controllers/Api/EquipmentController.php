@@ -17,7 +17,21 @@ class EquipmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
+            $query = EquipmentListing::with([
+                'seller.profile',
+                'seller.sellerProfile',
+                'category',
+                'seller' => function($q) {
+                    $q->withCount([
+                        'listings as listings_count' => function($query) {
+                            $query->where('status', 'active');
+                        },
+                        'sales as sales_count' => function($query) {
+                            $query->where('status', 'completed');
+                        }
+                    ]);
+                }
+            ])
                 ->active()
                 ->published()
                 ->notExpired();
@@ -590,6 +604,43 @@ class EquipmentController extends Controller
                 'message' => 'Failed to upload images',
                 'error' => $e->getMessage(),
             ], 400);
+        }
+    }
+
+    /**
+     * Track listing view
+     */
+    public function trackView($id): JsonResponse
+    {
+        try {
+            $listing = EquipmentListing::findOrFail($id);
+
+            // Increment view count
+            $listing->increment('view_count');
+
+            // Log the view event
+            \App\Services\LoggingService::logListing('view_tracked', [
+                'listing_id' => $listing->id,
+                'listing_title' => $listing->title,
+                'seller_id' => $listing->seller_id,
+                'previous_count' => $listing->view_count - 1,
+                'new_count' => $listing->view_count,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'View tracked successfully',
+                'data' => [
+                    'view_count' => $listing->view_count,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to track view',
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 }

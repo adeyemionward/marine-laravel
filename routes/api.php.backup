@@ -443,6 +443,46 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             Route::delete('/{id}', [KnowledgeBaseController::class, 'destroy']);
         });
 
+        // Newsletter Management (uses Communication/NewsLetterController)
+        Route::prefix('newsletters')->group(function () {
+            Route::get('/', [NewsLetterController::class, 'index']);
+            Route::post('/', [NewsLetterController::class, 'store']);
+            Route::get('/stats', [NewsLetterController::class, 'getStats']);
+            Route::get('/settings', [NewsLetterController::class, 'getSettings']);
+            Route::put('/settings', [NewsLetterController::class, 'updateSettings']);
+            Route::get('/featured-listings', [NewsLetterController::class, 'getFeaturedListings']);
+            Route::post('/promotional', [NewsLetterController::class, 'createPromotionalNewsletter']);
+            Route::get('/{id}', [NewsLetterController::class, 'show']);
+            Route::put('/{id}', [NewsLetterController::class, 'update']);
+            Route::delete('/{id}', [NewsLetterController::class, 'destroy']);
+            Route::post('/{id}/send', [NewsLetterController::class, 'send']);
+            Route::post('/{id}/send-to-all', [NewsLetterController::class, 'sendToAllUsers']);
+            Route::post('/{id}/duplicate', [NewsLetterController::class, 'duplicate']);
+        });
+
+        // Newsletter Templates Management
+        Route::prefix('newsletter-templates')->group(function () {
+            Route::get('/', [NewsLetterTemplateController::class, 'index']);
+            Route::post('/', [NewsLetterTemplateController::class, 'store']);
+            Route::get('/{id}', [NewsLetterTemplateController::class, 'show']);
+            Route::put('/{id}', [NewsLetterTemplateController::class, 'update']);
+            Route::delete('/{id}', [NewsLetterTemplateController::class, 'destroy']);
+            Route::post('/{id}/duplicate', [NewsLetterTemplateController::class, 'duplicate']);
+            Route::get('/{id}/preview', [NewsLetterTemplateController::class, 'preview']);
+        });
+
+        // Newsletter Settings Management
+        Route::prefix('newsletter-settings')->group(function () {
+            Route::get('/', [NewsLetterController::class, 'getSettings']);
+            Route::put('/', [NewsLetterController::class, 'updateSettings']);
+        });
+
+        // Newsletter Subscribers Management
+        Route::prefix('newsletter-subscribers')->group(function () {
+            Route::get('/', [NewsletterSubscriberController::class, 'index']);
+            Route::post('/', [NewsletterSubscriberController::class, 'store']);
+            Route::get('/stats', [NewsletterSubscriberController::class, 'getStats']);
+        });
 
         // Email Configuration
         Route::prefix('email-configuration')->group(function () {
@@ -465,58 +505,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             Route::get('/category-stats', [FinancialTransactionController::class, 'getCategoryStats']);
             Route::post('/reconcile', [FinancialTransactionController::class, 'reconcile']);
         });
-
-        // Invoice Utility Routes (for service invoice creation)
-        Route::get('/invoice-users-dropdown', [\App\Http\Controllers\Api\InvoiceUtilityController::class, 'getUsersForInvoiceDropdown']);
-        Route::get('/invoice-service-templates', [\App\Http\Controllers\Api\InvoiceUtilityController::class, 'getServiceTemplates']);
-        Route::get('/invoice-stats', [\App\Http\Controllers\Api\InvoiceUtilityController::class, 'getInvoiceStats']);
-
-        // Expense Management Routes
-        Route::prefix('expenses')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Api\ExpenseController::class, 'index']);
-            Route::post('/', [\App\Http\Controllers\Api\ExpenseController::class, 'store']);
-            Route::get('/categories', [\App\Http\Controllers\Api\ExpenseController::class, 'getCategories']);
-            Route::get('/stats', [\App\Http\Controllers\Api\ExpenseController::class, 'getStats']);
-            Route::get('/{id}', [\App\Http\Controllers\Api\ExpenseController::class, 'show']);
-            Route::put('/{id}', [\App\Http\Controllers\Api\ExpenseController::class, 'update']);
-            Route::delete('/{id}', [\App\Http\Controllers\Api\ExpenseController::class, 'destroy']);
-            Route::post('/{id}/approve', [\App\Http\Controllers\Api\ExpenseController::class, 'approve']);
-            Route::post('/{id}/reject', [\App\Http\Controllers\Api\ExpenseController::class, 'reject']);
-            Route::post('/{id}/mark-paid', [\App\Http\Controllers\Api\ExpenseController::class, 'markAsPaid']);
-        });
-
-        // Admin Dashboard Routes
-        Route::prefix('admin-dashboard')->group(function () {
-            // Newsletter Management (uses Communication/NewsLetterController)
-            Route::prefix('newsletters')->group(function () {
-                Route::get('/', [NewsLetterController::class, 'index']);
-                Route::post('/', [NewsLetterController::class, 'store']);
-                Route::get('/stats', [NewsLetterController::class, 'getStats']);
-                Route::get('/settings', [NewsLetterController::class, 'getSettings']);
-                Route::put('/settings', [NewsLetterController::class, 'updateSettings']);
-                Route::get('/featured-listings', [NewsLetterController::class, 'getFeaturedListings']);
-                Route::get("/recipients", [NewsLetterController::class, "getRecipients"]);
-                Route::post("/recipients/bulk-update", [NewsLetterController::class, "bulkUpdateSubscription"]);
-                Route::post("/recipients/update", [NewsLetterController::class, "updateUserSubscription"]);
-                Route::post('/promotional', [NewsLetterController::class, 'createPromotionalNewsletter']);
-                Route::get('/{id}', [NewsLetterController::class, 'show']);
-                Route::put('/{id}', [NewsLetterController::class, 'update']);
-                Route::delete('/{id}', [NewsLetterController::class, 'destroy']);
-                Route::post('/{id}/send', [NewsLetterController::class, 'send']);
-                Route::post('/{id}/send-to-all', [NewsLetterController::class, 'sendToAllUsers']);
-                Route::post('/{id}/duplicate', [NewsLetterController::class, 'duplicate']);
-                Route::post('/{id}/resend', [NewsLetterController::class, 'resend']);
-            });
-
-            // Newsletter Templates Management
-            Route::prefix('newsletter-templates')->group(function () {
-                Route::get('/', [NewsletterTemplateController::class, 'index']);
-                Route::post('/', [NewsletterTemplateController::class, 'store']);
-                Route::get('/{id}', [NewsletterTemplateController::class, 'show']);
-                Route::put('/{id}', [NewsletterTemplateController::class, 'update']);
-                Route::delete('/{id}', [NewsletterTemplateController::class, 'destroy']);
-                Route::post('/{id}/duplicate', [NewsletterTemplateController::class, 'duplicate']);
-            });
-        });
     });
 });
+// Invoice Utility Routes
+Route::get('/invoice-users-dropdown', [\App\Http\Controllers\Api\InvoiceUtilityController::class, 'getUsersForInvoiceDropdown']);
+Route::get('/invoice-service-templates', [\App\Http\Controllers\Api\InvoiceUtilityController::class, 'getServiceTemplates']);
+Route::get('/invoice-stats', [\App\Http\Controllers\Api\InvoiceUtilityController::class, 'getInvoiceStats']);

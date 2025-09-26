@@ -114,19 +114,73 @@ class PaymentController extends Controller
             $payload = $request->all();
             $eventType = $payload['event'] ?? '';
 
-            if ($eventType === 'charge.completed') {
+            if (in_array($eventType, ['charge.completed', 'transfer.completed'])) {
                 $data = $payload['data'];
                 $txRef = $data['tx_ref'];
                 $transactionId = $data['id'];
+                $status = $data['status'];
 
-                // Verify the transaction
-                $result = $this->paymentGateway->verifyFlutterwavePayment($transactionId);
+                if ($status === 'successful') {
+                    // Find payment by transaction reference
+                    $payment = Payment::where('gateway_reference', $txRef)
+                        ->orWhere('payment_reference', $txRef)
+                        ->where('status', 'pending')
+                        ->first();
 
-                if ($result['success']) {
-                    Log::info('Flutterwave payment completed successfully', [
-                        'tx_ref' => $txRef,
-                        'transaction_id' => $transactionId
-                    ]);
+                    if ($payment) {
+                        // Verify the transaction with Flutterwave
+                        $result = $this->paymentGateway->verifyFlutterwavePayment($transactionId);
+
+                        if ($result['success'] && $result['amount'] == $payment->amount) {
+                            // Mark payment as completed
+                            $payment->update([
+                                'gateway_reference' => $transactionId,
+                                'gateway_response' => $data,
+                            ]);
+
+                            $payment->markAsCompleted($data);
+
+                            Log::info('Flutterwave payment completed successfully', [
+                                'payment_id' => $payment->id,
+                                'tx_ref' => $txRef,
+                                'transaction_id' => $transactionId,
+                                'amount' => $payment->amount
+                            ]);
+                        } else {
+                            Log::warning('Flutterwave payment verification failed', [
+                                'tx_ref' => $txRef,
+                                'transaction_id' => $transactionId,
+                                'verification_result' => $result
+                            ]);
+                        }
+                    } else {
+                        Log::warning('Flutterwave payment not found', [
+                            'tx_ref' => $txRef,
+                            'transaction_id' => $transactionId
+                        ]);
+                    }
+                } else if ($status === 'failed') {
+                    // Handle failed payment
+                    $payment = Payment::where('gateway_reference', $txRef)
+                        ->orWhere('payment_reference', $txRef)
+                        ->where('status', 'pending')
+                        ->first();
+
+                    if ($payment) {
+                        $payment->update([
+                            'status' => 'failed',
+                            'gateway_reference' => $transactionId,
+                            'gateway_response' => $data,
+                            'failed_at' => now(),
+                        ]);
+
+                        Log::info('Flutterwave payment failed', [
+                            'payment_id' => $payment->id,
+                            'tx_ref' => $txRef,
+                            'transaction_id' => $transactionId,
+                            'reason' => $data['processor_response'] ?? 'Unknown reason'
+                        ]);
+                    }
                 }
             }
 
@@ -159,17 +213,74 @@ class PaymentController extends Controller
             $payload = $request->all();
             $event = $payload['event'] ?? '';
 
-            if ($event === 'charge.success') {
+            if (in_array($event, ['charge.success', 'charge.failed'])) {
                 $data = $payload['data'];
                 $reference = $data['reference'];
+                $status = $data['status'];
+                $amount = $data['amount']; // Amount in kobo
 
-                // Verify the transaction
-                $result = $this->paymentGateway->verifyPaystackPayment($reference);
+                if ($status === 'success') {
+                    // Find payment by transaction reference
+                    $payment = Payment::where('gateway_reference', $reference)
+                        ->orWhere('payment_reference', $reference)
+                        ->where('status', 'pending')
+                        ->first();
 
-                if ($result['success']) {
-                    Log::info('Paystack payment completed successfully', [
-                        'reference' => $reference
-                    ]);
+                    if ($payment) {
+                        // Verify the transaction with Paystack
+                        $result = $this->paymentGateway->verifyPaystackPayment($reference);
+
+                        // Convert kobo to naira for comparison
+                        $amountInNaira = $amount / 100;
+
+                        if ($result['success'] && $amountInNaira == $payment->amount) {
+                            // Mark payment as completed
+                            $payment->update([
+                                'gateway_reference' => $reference,
+                                'gateway_response' => $data,
+                            ]);
+
+                            $payment->markAsCompleted($data);
+
+                            Log::info('Paystack payment completed successfully', [
+                                'payment_id' => $payment->id,
+                                'reference' => $reference,
+                                'amount' => $payment->amount
+                            ]);
+                        } else {
+                            Log::warning('Paystack payment verification failed', [
+                                'reference' => $reference,
+                                'verification_result' => $result,
+                                'amount_webhook' => $amountInNaira,
+                                'amount_expected' => $payment->amount
+                            ]);
+                        }
+                    } else {
+                        Log::warning('Paystack payment not found', [
+                            'reference' => $reference
+                        ]);
+                    }
+                } else if ($status === 'failed') {
+                    // Handle failed payment
+                    $payment = Payment::where('gateway_reference', $reference)
+                        ->orWhere('payment_reference', $reference)
+                        ->where('status', 'pending')
+                        ->first();
+
+                    if ($payment) {
+                        $payment->update([
+                            'status' => 'failed',
+                            'gateway_reference' => $reference,
+                            'gateway_response' => $data,
+                            'failed_at' => now(),
+                        ]);
+
+                        Log::info('Paystack payment failed', [
+                            'payment_id' => $payment->id,
+                            'reference' => $reference,
+                            'reason' => $data['gateway_response'] ?? 'Unknown reason'
+                        ]);
+                    }
                 }
             }
 

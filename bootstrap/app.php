@@ -17,19 +17,27 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
-        
-        // Handle CORS
+
+        // Add API security and rate limiting
+        $middleware->api(append: [
+            \App\Http\Middleware\RequestIdMiddleware::class,
+            \App\Http\Middleware\ApiSecurityMiddleware::class,
+            \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
+
+        // Handle CORS for web routes
         $middleware->web(append: [
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
-        
-        $middleware->api(append: [
-            \Illuminate\Http\Middleware\HandleCors::class,
-        ]);
-        
+
+        // Add rate limiting with different tiers
+        $middleware->throttleApi('api');
+
         // Register custom middleware aliases
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'api.rate_limit' => \App\Http\Middleware\ApiRateLimitMiddleware::class,
+            'api.security' => \App\Http\Middleware\ApiSecurityMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

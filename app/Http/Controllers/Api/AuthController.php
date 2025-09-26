@@ -62,14 +62,14 @@ class AuthController extends Controller
 
             DB::commit();
 
-            // Send email verification (optional - can be implemented later)
-            // $user->sendEmailVerificationNotification();
+            // Send email verification notification
+            $user->notify(new \App\Notifications\EmailVerificationNotification());
 
             return response()->json([
                 'success' => true,
                 'message' => 'Registration successful',
                 'data' => [
-                    'user' => new UserResource($user->load(['profile', 'role'])),
+                    'user' => new UserResource($user->load(['profile', 'role', 'sellerProfile'])),
                     'token' => $token,
                     'token_type' => 'Bearer',
                 ],
@@ -122,7 +122,7 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Login successful',
                 'data' => [
-                    'user' => new UserResource($user->load(['profile', 'role'])),
+                    'user' => new UserResource($user->load(['profile', 'role', 'sellerProfile'])),
                     'token' => $token,
                     'token_type' => 'Bearer',
                 ],
@@ -186,7 +186,7 @@ class AuthController extends Controller
     public function user(Request $request): JsonResponse
     {
         try {
-            $user = $request->user()->load(['profile', 'role']);
+            $user = $request->user()->load(['profile', 'role', 'sellerProfile']);
 
             return response()->json([
                 'success' => true,
@@ -220,7 +220,7 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Token refreshed successfully',
                 'data' => [
-                    'user' => new UserResource($user->load(['profile', 'role'])),
+                    'user' => new UserResource($user->load(['profile', 'role', 'sellerProfile'])),
                     'token' => $token,
                     'token_type' => 'Bearer',
                 ],
@@ -364,6 +364,44 @@ class AuthController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Email verification failed',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Resend email verification notification
+     */
+    public function resendVerification(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated',
+                ], 401);
+            }
+
+            if ($user->hasVerifiedEmail()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email already verified',
+                ], 400);
+            }
+
+            $user->notify(new \App\Notifications\EmailVerificationNotification());
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Verification email sent successfully',
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send verification email',
                 'error' => $e->getMessage(),
             ], 500);
         }

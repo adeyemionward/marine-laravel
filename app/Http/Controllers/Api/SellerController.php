@@ -434,7 +434,7 @@ class SellerController extends Controller
                 return response()->json([
                     'success' => true,
                     'data' => [
-                        'is_seller' => false,
+                        'is_seller' => $user->isSeller(),
                         'application_status' => $application ? [
                             'status' => $application->status,
                             'submitted_at' => $application->created_at,
@@ -517,7 +517,7 @@ class SellerController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'is_seller' => true,
+                    'is_seller' => $user->isSeller(),
                     'seller_profile' => [
                         'id' => $sellerProfile->id,
                         'business_name' => $sellerProfile->business_name,

@@ -75,33 +75,30 @@ class SellerApplication extends Model
             'admin_notes' => $notes,
         ]);
 
-        // Create or update seller profile
-        $sellerProfile = SellerProfile::updateOrCreate(
-            ['user_id' => $this->user_id],
-            [
-                'business_name' => $this->business_name,
-                'business_description' => $this->business_description,
-                'specialties' => $this->specialties,
-                'years_active' => $this->years_experience,
-                'verification_status' => 'approved',
-                'verified_at' => now(),
-                'verification_documents' => $this->business_documents,
-            ]
-        );
+        // Use the centralized promoteToSeller method with application data
+        $sellerData = [
+            'business_name' => $this->business_name,
+            'business_description' => $this->business_description,
+            'specialties' => $this->specialties,
+            'years_active' => $this->years_experience,
+            'verification_status' => 'approved',
+            'verified_at' => now(),
+            'verification_documents' => $this->business_documents,
+        ];
 
-        // Update user role to seller and set seller_profile_id
-        $this->user->update([
-            'role' => 'seller',
-            'seller_profile_id' => $sellerProfile->id,
-        ]);
+        $promoted = $this->user->promoteToSeller($sellerData);
 
-        // Update user profile verification status
-        $this->user->profile->update([
-            'is_verified' => true,
-            'email_verified_at' => now(),
-        ]);
+        if ($promoted) {
+            // Update user profile verification status
+            if ($this->user->profile) {
+                $this->user->profile->update([
+                    'is_verified' => true,
+                    'email_verified_at' => now(),
+                ]);
+            }
+        }
 
-        return true;
+        return $promoted;
     }
 
     public function reject(User $reviewer, string $reason): bool
