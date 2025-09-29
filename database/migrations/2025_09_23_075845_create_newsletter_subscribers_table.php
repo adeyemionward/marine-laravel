@@ -15,16 +15,17 @@ return new class extends Migration
             $table->id();
             $table->string('email')->unique();
             $table->string('name')->nullable();
-            $table->string('status')->default('active'); // active, unsubscribed, bounced
-            $table->string('source')->default('website'); // website, import, api
-            $table->json('preferences')->nullable(); // subscription preferences
-            $table->timestamp('subscribed_at')->useCurrent();
+            $table->enum('status', ['active', 'unsubscribed', 'bounced', 'complained'])->default('active');
+            $table->json('preferences')->nullable(); // e.g., frequency, categories
+            $table->string('subscription_token')->unique(); // for unsubscribe links
+            $table->timestamp('subscribed_at');
             $table->timestamp('unsubscribed_at')->nullable();
-            $table->string('unsubscribe_token')->unique()->nullable();
+            $table->string('source')->nullable(); // how they subscribed
+            $table->json('tags')->nullable(); // for segmentation
             $table->timestamps();
 
-            $table->index(['status', 'subscribed_at']);
-            $table->index('email');
+            $table->index(['status', 'email']);
+            $table->index(['subscribed_at']);
         });
     }
 
