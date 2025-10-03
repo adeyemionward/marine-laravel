@@ -558,4 +558,272 @@ class SellerController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get seller dashboard stats (for authenticated seller)
+     */
+    public function getSellerStats(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            $sellerProfile = SellerProfile::where('user_id', $user->id)->firstOrFail();
+
+            $period = $request->get('period', '30'); // days
+            $startDate = now()->subDays((int)$period);
+
+            // Listings stats
+            $totalListings = $sellerProfile->listings()->count();
+            $activeListings = $sellerProfile->listings()->where('status', 'active')->count();
+            $soldListings = $sellerProfile->listings()->where('status', 'sold')->count();
+            $totalViews = $sellerProfile->listings()->sum('view_count');
+            $totalInquiries = $sellerProfile->listings()->sum('inquiry_count');
+
+            // Revenue stats (if orders exist)
+            $totalRevenue = DB::table('orders')
+                ->where('seller_id', $user->id)
+                ->where('payment_status', 'completed')
+                ->sum('total_amount');
+
+            $periodRevenue = DB::table('orders')
+                ->where('seller_id', $user->id)
+                ->where('payment_status', 'completed')
+                ->where('created_at', '>=', $startDate)
+                ->sum('total_amount');
+
+            // Reviews stats
+            $averageRating = $sellerProfile->rating;
+            $totalReviews = $sellerProfile->review_count;
+            $recentReviews = $sellerProfile->reviews()
+                ->where('created_at', '>=', $startDate)
+                ->count();
+
+            // Performance metrics
+            $conversionRate = $totalInquiries > 0
+                ? round(($soldListings / $totalInquiries) * 100, 2)
+                : 0;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'listings' => [
+                        'total' => $totalListings,
+                        'active' => $activeListings,
+                        'sold' => $soldListings,
+                        'pending' => $totalListings - $activeListings - $soldListings,
+                    ],
+                    'engagement' => [
+                        'total_views' => $totalViews,
+                        'total_inquiries' => $totalInquiries,
+                        'average_views_per_listing' => $totalListings > 0 ? round($totalViews / $totalListings, 1) : 0,
+                    ],
+                    'revenue' => [
+                        'total' => $totalRevenue,
+                        'period' => $periodRevenue,
+                        'currency' => 'NGN',
+                    ],
+                    'reviews' => [
+                        'average_rating' => $averageRating,
+                        'total_reviews' => $totalReviews,
+                        'recent_reviews' => $recentReviews,
+                    ],
+                    'performance' => [
+                        'conversion_rate' => $conversionRate,
+                        'response_time' => $sellerProfile->response_time,
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch seller stats',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get seller's reviews (for authenticated seller)
+     */
+    public function getSellerReviews(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            $sellerProfile = SellerProfile::where('user_id', $user->id)->firstOrFail();
+
+            $reviews = $sellerProfile->reviews()
+                ->with(['reviewer', 'listing'])
+                ->when($request->filled('rating'), function ($query) use ($request) {
+                    $query->where('rating', $request->rating);
+                })
+                ->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 10));
+
+            $ratingsBreakdown = [
+                5 => $sellerProfile->reviews()->where('rating', 5)->count(),
+                4 => $sellerProfile->reviews()->where('rating', 4)->count(),
+                3 => $sellerProfile->reviews()->where('rating', 3)->count(),
+                2 => $sellerProfile->reviews()->where('rating', 2)->count(),
+                1 => $sellerProfile->reviews()->where('rating', 1)->count(),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $reviews->items(),
+                'meta' => [
+                    'current_page' => $reviews->currentPage(),
+                    'per_page' => $reviews->perPage(),
+                    'total' => $reviews->total(),
+                    'last_page' => $reviews->lastPage(),
+                ],
+                'summary' => [
+                    'average_rating' => $sellerProfile->rating,
+                    'total_reviews' => $sellerProfile->review_count,
+                    'ratings_breakdown' => $ratingsBreakdown,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch reviews',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get seller's favorite listings
+     */
+    public function getFavorites(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            $favorites = DB::table('user_favorites')
+                ->join('equipment_listings', 'user_favorites.listing_id', '=', 'equipment_listings.id')
+                ->join('equipment_categories', 'equipment_listings.category_id', '=', 'equipment_categories.id')
+                ->where('user_favorites.user_profile_id', $user->id)
+                ->select(
+                    'equipment_listings.*',
+                    'equipment_categories.name as category_name',
+                    'user_favorites.created_at as favorited_at'
+                )
+                ->orderBy('user_favorites.created_at', 'desc')
+                ->paginate($request->get('per_page', 12));
+
+            return response()->json([
+                'success' => true,
+                'data' => $favorites->items(),
+                'meta' => [
+                    'current_page' => $favorites->currentPage(),
+                    'per_page' => $favorites->perPage(),
+                    'total' => $favorites->total(),
+                    'last_page' => $favorites->lastPage(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch favorites',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get seller's activity log
+     */
+    public function getActivityLog(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            $activities = \App\Models\SellerActivityLog::forUser($user->id)
+                ->with('related')
+                ->when($request->filled('type'), function ($query) use ($request) {
+                    $query->byType($request->type);
+                })
+                ->when($request->filled('days'), function ($query) use ($request) {
+                    $query->recent((int)$request->days);
+                })
+                ->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 20));
+
+            // Activity type summary
+            $activityTypes = \App\Models\SellerActivityLog::forUser($user->id)
+                ->select('action_type', DB::raw('count(*) as count'))
+                ->groupBy('action_type')
+                ->get()
+                ->pluck('count', 'action_type');
+
+            return response()->json([
+                'success' => true,
+                'data' => $activities->items(),
+                'meta' => [
+                    'current_page' => $activities->currentPage(),
+                    'per_page' => $activities->perPage(),
+                    'total' => $activities->total(),
+                    'last_page' => $activities->lastPage(),
+                ],
+                'summary' => [
+                    'activity_types' => $activityTypes,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch activity log',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Reply to a review (seller can respond to reviews)
+     */
+    public function replyToReview(Request $request, $reviewId): JsonResponse
+    {
+        try {
+            $request->validate([
+                'reply' => 'required|string|max:1000',
+            ]);
+
+            $user = $request->user();
+            $review = SellerReview::findOrFail($reviewId);
+
+            // Verify this review belongs to the authenticated seller
+            $sellerProfile = SellerProfile::where('user_id', $user->id)->firstOrFail();
+            if ($review->seller_id !== $sellerProfile->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to reply to this review',
+                ], 403);
+            }
+
+            $review->update([
+                'seller_reply' => $request->reply,
+                'seller_replied_at' => now(),
+            ]);
+
+            // Log activity
+            \App\Models\SellerActivityLog::log(
+                $user->id,
+                'review_replied',
+                'Replied to a review',
+                $review,
+                ['rating' => $review->rating]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Reply posted successfully',
+                'data' => $review->fresh(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to post reply',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

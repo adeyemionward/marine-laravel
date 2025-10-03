@@ -19,26 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:3002',
-        'http://localhost:3003',
-        'http://localhost:5173',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:3001',
-        'http://127.0.0.1:3002',
-        'http://127.0.0.1:3003',
-        'http://127.0.0.1:5173',
-        'http://172.20.10.3:3001',
-        'http://172.20.10.3:3000',
-        'https://marineng.com',
-        'https://www.marineng.com',
-        'https://marine-ng.vercel.app',
-        'https://www.marine-ng.vercel.app',
-        env('FRONTEND_URL', 'https://marine-ng.vercel.app'),
-
-    ],
+    'allowed_origins' => array_filter(explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173,https://marine-ng.vercel.app'))),
 
     'allowed_origins_patterns' => [],
 

@@ -4,27 +4,59 @@ namespace App\Http\Controllers\Api\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\AppBranding;
-use App\Services\CloudinaryService;
+use App\Services\FileStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class AppBrandingController extends Controller
 {
-    private $cloudinaryService;
+    private $fileStorageService;
 
-    public function __construct(CloudinaryService $cloudinaryService)
+    public function __construct(FileStorageService $fileStorageService)
     {
-        $this->cloudinaryService = $cloudinaryService;
+        $this->fileStorageService = $fileStorageService;
     }
 
     public function getAppName()
     {
         $config = AppBranding::first();
 
+        // Transform the data to match frontend expectations
+        $data = $config ? [
+            'app_name' => $config->app_name,
+            'logoUrl' => $config->primary_logo,
+            'adminLogoUrl' => $config->admin_logo,
+            'logoAlt' => $config->app_name . ' Logo',
+            'adminLogoAlt' => $config->app_name . ' Admin Logo',
+        ] : null;
+
         return response()->json([
             'status' => 'success',
-            'config' => $config
+            'success' => true,
+            'data' => $data
+        ]);
+    }
+
+    /**
+     * Get public branding settings (no auth required)
+     */
+    public function getPublicBranding()
+    {
+        $config = AppBranding::first();
+
+        $data = [
+            'appName' => $config->app_name ?? 'Marine.ng',
+            'logoUrl' => $config->primary_logo ?? '/assets/images/marine.ng_logo_2026-1754742671588.png',
+            'adminLogoUrl' => $config->admin_logo ?? '/assets/images/marine.ng_logo_2026-1754742671588.png',
+            'logoAlt' => ($config->app_name ?? 'Marine.ng') . ' Logo',
+            'adminLogoAlt' => ($config->app_name ?? 'Marine.ng') . ' Admin Logo',
+        ];
+
+        return response()->json([
+            'status' => 'success',
+            'success' => true,
+            'data' => $data
         ]);
     }
 
@@ -50,6 +82,7 @@ class AppBrandingController extends Controller
 
         return response()->json([
             'status' => 'success',
+            'success' => true,
             'message' => 'App name updated',
             'data' => $app
         ]);
@@ -60,7 +93,7 @@ class AppBrandingController extends Controller
         $validator = Validator::make($request->all(), [
             'logo_type' => 'required|string|in:primary,admin',
             'logo' => 'required|image|mimes:png,jpg,jpeg,svg,webp|max:10240', // 10MB max
-            'folder' => 'sometimes|string|in:equipment,profiles,documents,banners,general'
+            'folder' => 'sometimes|string|in:equipment,profiles,documents,banners,general,logos'
         ]);
 
         if ($validator->fails()) {
@@ -71,7 +104,7 @@ class AppBrandingController extends Controller
         }
 
         try {
-            $folder = $request->get('folder', 'general');
+            $folder = $request->get('folder', 'logos');
             $options = $request->only(['public_id', 'tags']);
 
             if (!$request->hasFile('logo')) {
@@ -82,7 +115,7 @@ class AppBrandingController extends Controller
             }
 
             // Upload the file
-            $result = $this->cloudinaryService->uploadImage(
+            $result = $this->fileStorageService->uploadImage(
                 $request->file('logo'),
                 $folder,
                 $options
@@ -109,6 +142,7 @@ class AppBrandingController extends Controller
 
             return response()->json([
                 'status' => 'success',
+                'success' => true,
                 'message' => ucfirst($type) . ' logo uploaded successfully',
                 'logo_url' => $result['data']['url'],
                 'details' => $result['data']
@@ -139,6 +173,7 @@ class AppBrandingController extends Controller
 
         return response()->json([
             'status' => 'success',
+            'success' => true,
             'message' => ucfirst($type) . ' logo reset'
         ]);
     }

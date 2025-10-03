@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\CloudinaryService;
+use App\Services\FileStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class CloudinaryController extends Controller
 {
-    private $cloudinaryService;
+    private $fileStorageService;
 
-    public function __construct(CloudinaryService $cloudinaryService)
+    public function __construct(FileStorageService $fileStorageService)
     {
-        $this->cloudinaryService = $cloudinaryService;
+        $this->fileStorageService = $fileStorageService;
     }
 
     /**
@@ -32,7 +32,7 @@ class CloudinaryController extends Controller
             $folder = $request->get('folder', 'general');
             $options = $request->only(['public_id', 'eager', 'tags']);
 
-            $signature = $this->cloudinaryService->createUploadSignature($folder, $options);
+            $signature = $this->fileStorageService->createUploadSignature($folder, $options);
 
             return response()->json([
                 'success' => true,
@@ -95,10 +95,10 @@ class CloudinaryController extends Controller
             $options = $request->only(['public_id', 'tags']);
             
             if ($request->hasFile('image')) {
-                \Log::info('CloudinaryController: About to call cloudinaryService->uploadImage', [
+                \Log::info('CloudinaryController: About to call fileStorageService->uploadImage', [
                     'folder' => $folder,
                     'options' => $options,
-                    'service_exists' => isset($this->cloudinaryService),
+                    'service_exists' => isset($this->fileStorageService),
                     'file_details' => [
                         'name' => $request->file('image')->getClientOriginalName(),
                         'size' => $request->file('image')->getSize(),
@@ -106,13 +106,13 @@ class CloudinaryController extends Controller
                     ]
                 ]);
 
-                $result = $this->cloudinaryService->uploadImage(
+                $result = $this->fileStorageService->uploadImage(
                     $request->file('image'),
                     $folder,
                     $options
                 );
 
-                \Log::info('CloudinaryController: cloudinaryService->uploadImage completed', [
+                \Log::info('CloudinaryController: fileStorageService->uploadImage completed', [
                     'result' => $result
                 ]);
 
@@ -166,7 +166,7 @@ class CloudinaryController extends Controller
             $folder = $request->get('folder', 'general');
             $options = $request->only(['tags']);
 
-            $result = $this->cloudinaryService->uploadMultipleImages(
+            $result = $this->fileStorageService->uploadMultipleImages(
                 $request->file('images'),
                 $folder,
                 $options
@@ -196,7 +196,7 @@ class CloudinaryController extends Controller
                 'public_id' => 'required|string'
             ]);
 
-            $result = $this->cloudinaryService->deleteImage($request->public_id);
+            $result = $this->fileStorageService->deleteImage($request->public_id);
 
             return response()->json([
                 'success' => $result['success'],
@@ -223,7 +223,7 @@ class CloudinaryController extends Controller
                 'public_ids.*' => 'string'
             ]);
 
-            $result = $this->cloudinaryService->deleteMultipleImages($request->public_ids);
+            $result = $this->fileStorageService->deleteMultipleImages($request->public_ids);
 
             return response()->json([
                 'success' => $result['success'],
@@ -254,7 +254,7 @@ class CloudinaryController extends Controller
             $transformation = $request->get('transformation', 'medium');
             $options = $request->get('options', []);
 
-            $url = $this->cloudinaryService->getOptimizedUrl(
+            $url = $this->fileStorageService->getOptimizedUrl(
                 $request->public_id,
                 $transformation,
                 $options
@@ -294,7 +294,7 @@ class CloudinaryController extends Controller
 
             $transformations = $request->get('transformations', ['thumbnail', 'medium', 'large']);
 
-            $urls = $this->cloudinaryService->getMultipleUrls($request->public_id, $transformations);
+            $urls = $this->fileStorageService->getMultipleUrls($request->public_id, $transformations);
 
             return response()->json([
                 'success' => true,

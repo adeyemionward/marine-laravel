@@ -19,12 +19,15 @@ class SellerReview extends Model
         'review_categories',
         'is_verified_purchase',
         'verified_at',
+        'seller_reply',
+        'seller_replied_at',
     ];
 
     protected $casts = [
         'review_categories' => 'array',
         'is_verified_purchase' => 'boolean',
         'verified_at' => 'datetime',
+        'seller_replied_at' => 'datetime',
     ];
 
     // Relationships

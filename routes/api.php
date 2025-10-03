@@ -36,6 +36,7 @@ use App\Http\Controllers\Api\FinancialTransactionController;
 use App\Http\Controllers\Api\InvoiceUtilityController;
 use App\Http\Controllers\Api\Communication\NewsletterSettingsController;
 use App\Http\Controllers\Api\SystemMonitorController;
+use App\Http\Controllers\Api\Admin\ApiKeyController;
 use App\Models\EmailConfig;
 
 // Simple test route for debugging
@@ -140,6 +141,9 @@ Route::prefix('v1')->group(function () {
     Route::get('/sellers/{id}/reviews', [SellerController::class, 'reviews']);
     Route::get('/seller/specialties', [SellerController::class, 'specialties']);
 
+    // App Branding (public routes)
+    Route::get('/branding/public', [AppBrandingController::class, 'getPublicBranding']);
+
     // Knowledge Base (public routes)
     Route::get('/knowledge-base', [KnowledgeBaseController::class, 'index']);
     Route::get('/knowledge-base/categories', [KnowledgeBaseController::class, 'categories']);
@@ -213,6 +217,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/seller/apply', [SellerController::class, 'apply']);
     Route::get('/seller/application-status', [SellerController::class, 'applicationStatus']);
     Route::get('/seller/dashboard', [SellerController::class, 'dashboard']);
+
+    // Seller Dashboard Routes (for authenticated sellers)
+    Route::get('/seller/stats', [SellerController::class, 'getSellerStats']);
+    Route::get('/seller/reviews', [SellerController::class, 'getSellerReviews']);
+    Route::post('/seller/reviews/{reviewId}/reply', [SellerController::class, 'replyToReview']);
+    Route::get('/seller/favorites', [SellerController::class, 'getFavorites']);
+    Route::get('/seller/activity-log', [SellerController::class, 'getActivityLog']);
 
     // Order management
     Route::prefix('orders')->group(function () {
@@ -562,6 +573,16 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::delete('/{id}', [NewsLetterTemplateController::class, 'destroy']);
                 Route::post('/{id}/duplicate', [NewsLetterTemplateController::class, 'duplicate']);
             });
+
+            // API Key Management
+            Route::prefix('api-keys')->group(function () {
+                Route::get('/', [ApiKeyController::class, 'index']);
+                Route::post('/', [ApiKeyController::class, 'store']);
+                Route::get('/{apiKey}', [ApiKeyController::class, 'show']);
+                Route::put('/{apiKey}', [ApiKeyController::class, 'update']);
+                Route::delete('/{apiKey}', [ApiKeyController::class, 'destroy']);
+                Route::post('/{apiKey}/test', [ApiKeyController::class, 'test']);
+            });
         });
 
          // System Settings
@@ -570,6 +591,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::get('/getBackups', [BackupManagementController::class, 'getBackups']);
                 Route::post('/createBackup', [BackupManagementController::class, 'createBackup']);
                 Route::get('/listTables', [BackupManagementController::class, 'listTables']);
+                Route::get('/downloadBackup/{id}', [BackupManagementController::class, 'downloadBackup']);
                 Route::delete('/deleteBackup/{id}', [BackupManagementController::class, 'deleteBackup']);
             });
 

@@ -3099,14 +3099,14 @@ class AdminController extends Controller
                              ->whereIn('status', ['pending', 'overdue'])
                              ->findOrFail($id);
 
-            // Handle file upload to Cloudinary
+            // Handle file upload to storage
             $proofPublicId = null;
             $proofUrl = null;
-            
+
             if ($request->hasFile('payment_proof')) {
-                $cloudinaryService = app(\App\Services\CloudinaryService::class);
-                
-                $uploadResult = $cloudinaryService->uploadImage(
+                $fileStorageService = app(\App\Services\FileStorageService::class);
+
+                $uploadResult = $fileStorageService->uploadImage(
                     $request->file('payment_proof'),
                     'documents', // Use documents folder
                     [
@@ -3117,7 +3117,7 @@ class AdminController extends Controller
 
                 if ($uploadResult['success']) {
                     $proofPublicId = $uploadResult['data']['public_id'];
-                    $proofUrl = $uploadResult['data']['secure_url'];
+                    $proofUrl = $uploadResult['data']['url'];
                 } else {
                     return response()->json([
                         'success' => false,
