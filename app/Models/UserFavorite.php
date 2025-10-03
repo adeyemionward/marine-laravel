@@ -11,7 +11,7 @@ class UserFavorite extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_profile_id',
+        'user_id',
         'listing_id',
     ];
 
@@ -27,19 +27,19 @@ class UserFavorite extends Model
 
     public function scopeForUser($query, $userId)
     {
-        return $query->where('user_profile_id', $userId);
+        return $query->where('user_id', $userId);
     }
 
     public static function isFavorited($userId, $listingId): bool
     {
-        return static::where('user_profile_id', $userId)
+        return static::where('user_id', $userId)
             ->where('listing_id', $listingId)
             ->exists();
     }
 
     public static function toggle($userId, $listingId): bool
     {
-        $favorite = static::where('user_profile_id', $userId)
+        $favorite = static::where('user_id', $userId)
             ->where('listing_id', $listingId)
             ->first();
 
@@ -48,7 +48,7 @@ class UserFavorite extends Model
             return false; // Removed from favorites
         } else {
             static::create([
-                'user_profile_id' => $userId,
+                'user_id' => $userId,
                 'listing_id' => $listingId,
             ]);
             return true; // Added to favorites

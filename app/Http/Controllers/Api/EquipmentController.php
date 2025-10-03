@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\EquipmentListing;
+use App\Models\UserFavorite;
+use App\Models\SellerReview;
 use App\Http\Resources\EquipmentListingResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 class EquipmentController extends Controller
 {
 
@@ -347,17 +351,27 @@ class EquipmentController extends Controller
     /**
      * Display the specified equipment listing
      */
-    public function show(int $id): JsonResponse
+    public function show(int $id)
     {
         try {
             $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
-                ->active()
-                ->published()
-                ->notExpired()
-                ->findOrFail($id);
+            ->active()
+            ->published()
+            ->notExpired()
+            ->where('id', $id)
+            ->first();
+            
 
             // Increment view count
-            $listing->incrementViewCount();
+           // $listing->incrementViewCount();
+            
+            
+if (!$listing) {
+    return response()->json([
+        'success' => false,
+        'message' => 'Listing not found or does not meet criteria'
+    ], 404);
+}
 
             return response()->json([
                 'success' => true,
@@ -366,7 +380,7 @@ class EquipmentController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Listing not found',
+                'message' => 'Error fetching equipment listing',
                 'error' => $e->getMessage(),
             ], 404);
         }
@@ -492,7 +506,127 @@ class EquipmentController extends Controller
                 'success' => false,
                 'message' => 'Failed to toggle favorite',
                 'error' => $e->getMessage(),
-            ], 400);
+            ], 500);
+        }
+    }
+
+    public function addFavoriteItem(Request $request)
+    {
+        try{
+            $validator = Validator::make($request->all(), [
+                'listing_id'   => 'required|integer',
+            ]);
+        
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'status'=>false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $favorite = UserFavorite::firstOrCreate([
+                'user_id'   => Auth::id(),
+                'listing_id'   => $request->listing_id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Item added to favorites',
+                'data' => [
+                    'favorites' => $favorite,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to add favorite',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
+    public function removeFavoriteItem(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'item_id'   => 'required|integer',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'status'=>false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $userId = Auth::id();
+
+            $favorite = UserFavorite::where('user_id', $userId)
+                ->where('item_id', $request->listing_id)
+                ->first();
+
+            if (!$favorite) {
+                return response()->json([
+                    'message' => 'Item not found in favorites',
+                    'status'=>true,
+                    
+                ], 200);
+            }
+
+            $favorite->delete();
+
+            return $this->jsonResponse(true, 200, "Item removed from favorites", null, false, false);
+
+            return response()->json([
+                'message' => 'Item removed from favorites',
+                'status'=>true,
+            ], 200);
+
+        } catch (\Exception $th) {
+             return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch favorite',
+                'error' => $th->getMessage(),
+            ], 500);
+        }
+    }
+
+    // List all favorites for the user
+    public function fetchFavoriteItems()
+    {
+        try{
+            $user = Auth::guard('api')->user(); // Ensure you're using the correct guard
+
+            if (!$user) {
+                 return response()->json([
+                    'message' => 'Item empty',
+                    'status'=>true,
+                ], 200);
+            }
+
+            $favorites = UserFavorite::where('user_id', $user->id)->get();
+
+            $productIds = $favorites->pluck('listing_id');
+
+            $products = EquipmentListing::whereIn('id', $productIds)->get();
+
+             return response()->json([
+                'message' => 'Item fetched',
+                'status'=>true,
+                'Listing'=> $products
+            ], 200);
+
+        } catch (\Exception $th) {
+             return response()->json([
+                'success' => false,
+                'message' => 'Error fetching items',
+                'error' => $th->getMessage(),
+            ], 500);
         }
     }
 
@@ -642,5 +776,113 @@ class EquipmentController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+
+    // Get all reviews for a seller
+    public function fetchReview()
+    {
+        $reviewer_id =  Auth::id();
+        $reviews = SellerReview::with(['reviewer', 'listing'])
+            ->where('reviewer_id', $reviewer_id)
+            ->latest()
+            ->get();
+
+        return response()->json($reviews);
+    }
+
+    // Store a review
+    public function addReview(Request $request)
+    {
+        
+        // $validated = $request->validate([
+        //     // 'seller_id' => 'required|exists:users,id',
+        //     // 'reviewer_id' => 'required|exists:users,id',
+        //     'listing_id' => 'nullable|exists:listings,id',
+        //     'rating' => 'required|integer|min:1|max:5',
+        //     'review' => 'nullable|string',
+        //     // 'review_categories' => 'nullable|array',
+        //     // 'is_verified_purchase' => 'boolean',
+        // ]);
+        $validator = Validator::make($request->all(), [
+            'listing_id' => 'nullable|exists:equipment_listings,id',
+            'rating' => 'required|integer|min:1|max:5',
+            'review' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'status'=>false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $listingID = request('listing_id');
+
+
+       
+         $productDetails = EquipmentListing::where('id', $listingID)->first();
+         if(is_null($productDetails)){
+             return response()->json([
+                    'message' => 'Item not found ',
+                    'status'=>true,
+                    
+                ], 200);
+         }
+         $reviewer_id =  Auth::id();
+         
+
+        // if ($request->is_verified_purchase) {
+        //     $validated['verified_at'] = now();
+        // }
+
+        $review = new SellerReview();
+        $review->seller_id  = $productDetails->seller_id;
+        $review->reviewer_id = $reviewer_id;
+        $review->listing_id  = $request->input('listing_id');
+        $review->rating      = $request->input('rating');
+        $review->review      = $request->input('review');
+        $review->save();
+
+        return response()->json($review, 201);
+    }
+
+    // // Show single review
+    public function showReview($id)
+    {
+        $review = SellerReview::with(['reviewer', 'listing'])->findOrFail($id);
+
+        return response()->json($review);
+    }
+
+    // Update review
+    public function updateReviews(Request $request, $id)
+    {
+        $review = SellerReview::findOrFail($id);
+
+        $validated = $request->validate([
+            'rating' => 'sometimes|integer|min:1|max:5',
+            'review' => 'sometimes|string',
+            'review_categories' => 'sometimes|array',
+            'is_verified_purchase' => 'boolean',
+        ]);
+
+        if ($request->has('is_verified_purchase') && $request->is_verified_purchase) {
+            $validated['verified_at'] = now();
+        }
+
+        $review->update($validated);
+
+        return response()->json($review);
+    }
+
+    // Delete review
+    public function destroyReview($id)
+    {
+        $review = SellerReview::findOrFail($id);
+        $review->delete();
+
+        return response()->json(['message' => 'Review deleted successfully']);
     }
 }
