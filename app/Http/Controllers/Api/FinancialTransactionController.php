@@ -61,7 +61,8 @@ class FinancialTransactionController extends Controller
     public function getTransactions(Request $request): JsonResponse
     {
         try {
-            $query = FinancialTransaction::with(['user', 'subscription', 'equipmentListing', 'bannerPurchase', 'recordedBy']);
+            // Only eager load relationships that are safe
+            $query = FinancialTransaction::query();
 
             // Apply filters
             if ($request->filled('type')) {
@@ -152,6 +153,7 @@ class FinancialTransactionController extends Controller
                 'transaction_type' => $request->transaction_type,
                 'category' => $request->category,
                 'amount' => $request->amount,
+                'currency' => $request->currency ?? 'NGN',
                 'description' => $request->description,
                 'notes' => $request->notes,
                 'transaction_date' => $request->transaction_date,
@@ -165,13 +167,23 @@ class FinancialTransactionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Transaction created successfully',
-                'data' => $transaction->load(['user', 'recordedBy'])
+                'data' => $transaction->fresh()
             ], 201);
 
         } catch (\Exception $e) {
+            \Log::error('Financial Transaction Creation Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create transaction: ' . $e->getMessage()
+                'message' => 'Failed to create transaction: ' . $e->getMessage(),
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
             ], 500);
         }
     }
@@ -307,6 +319,15 @@ class FinancialTransactionController extends Controller
                 ->orderBy('total_amount', 'desc')
                 ->get();
 
+            // If no stats found, return default categories
+            if ($stats->isEmpty()) {
+                $defaultCategories = $this->getDefaultCategories();
+                return response()->json([
+                    'success' => true,
+                    'data' => $defaultCategories
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => $stats
@@ -318,6 +339,32 @@ class FinancialTransactionController extends Controller
                 'message' => 'Failed to get category stats: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get default predefined categories
+     */
+    private function getDefaultCategories(): array
+    {
+        $defaultIncomeCategories = [
+            ['category' => 'subscription_fees', 'transaction_type' => 'income', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'listing_fees', 'transaction_type' => 'income', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'featured_listing_fees', 'transaction_type' => 'income', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'banner_ads', 'transaction_type' => 'income', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'commission_fees', 'transaction_type' => 'income', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'other_income', 'transaction_type' => 'income', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+        ];
+
+        $defaultExpenseCategories = [
+            ['category' => 'server_hosting', 'transaction_type' => 'expense', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'marketing', 'transaction_type' => 'expense', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'payment_processing', 'transaction_type' => 'expense', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'office_expenses', 'transaction_type' => 'expense', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'staff_salaries', 'transaction_type' => 'expense', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+            ['category' => 'other_expenses', 'transaction_type' => 'expense', 'total_amount' => 0, 'transaction_count' => 0, 'avg_amount' => 0],
+        ];
+
+        return array_merge($defaultIncomeCategories, $defaultExpenseCategories);
     }
 
     /**

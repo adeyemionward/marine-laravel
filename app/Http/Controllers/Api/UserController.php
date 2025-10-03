@@ -104,16 +104,16 @@ class UserController extends Controller
     public function favorites(): JsonResponse
     {
         try {
-            $userId = Auth::user()->profile->id;
-            
-            $favorites = UserFavorite::where('user_profile_id', $userId)
-                ->with(['listing.category', 'listing.seller'])
+            $userId = Auth::id();
+
+            $favorites = UserFavorite::where('user_id', $userId)
+                ->with(['listing'])
                 ->orderBy('created_at', 'desc')
                 ->paginate(20);
 
             $listings = $favorites->getCollection()->map(function ($favorite) {
                 return $favorite->listing;
-            });
+            })->filter(); // Remove nulls in case listing was deleted
 
             return response()->json([
                 'success' => true,
@@ -126,6 +126,13 @@ class UserController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
+            \Log::error('Favorites Fetch Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => Auth::id()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch favorites',

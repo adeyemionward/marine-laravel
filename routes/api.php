@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 // Controller imports
 use App\Http\Controllers\Api\EquipmentController;
+use App\Http\Controllers\Api\EquipmentReviewController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\CategoryController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\Api\EmailConfigurationController;
 use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\FinancialController;
 use App\Http\Controllers\Api\FinancialTransactionController;
+use App\Http\Controllers\Api\FinancialCategoryController;
 use App\Http\Controllers\Api\InvoiceUtilityController;
 use App\Http\Controllers\Api\Communication\NewsletterSettingsController;
 use App\Http\Controllers\Api\SystemMonitorController;
@@ -104,6 +106,9 @@ Route::prefix('v1')->group(function () {
     Route::get('/equipment/popular', [EquipmentController::class, 'popular']);
     Route::get('/equipment/search', [EquipmentController::class, 'search']);
     Route::get('/equipment/{id}', [EquipmentController::class, 'show']);
+
+    // Equipment Reviews (public - no auth required to view)
+    Route::get('/equipment/{listingId}/reviews', [EquipmentReviewController::class, 'index']);
 
     // Categories
     Route::get('/categories', [CategoryController::class, 'index']);
@@ -183,6 +188,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::delete('/{id}', [EquipmentController::class, 'destroy']);
     Route::post('/{id}/images', [EquipmentController::class, 'uploadImages']);
     Route::post('/{id}/favorite', [EquipmentController::class, 'toggleFavorite']);
+
+    // Equipment Reviews (authenticated - posting, updating, deleting reviews)
+    Route::post('/{listingId}/reviews', [EquipmentReviewController::class, 'store']);
+    Route::put('/{listingId}/reviews/{reviewId}', [EquipmentReviewController::class, 'update']);
+    Route::delete('/{listingId}/reviews/{reviewId}', [EquipmentReviewController::class, 'destroy']);
+    Route::post('/{listingId}/reviews/{reviewId}/helpful', [EquipmentReviewController::class, 'markHelpful']);
+    Route::post('/{listingId}/reviews/{reviewId}/not-helpful', [EquipmentReviewController::class, 'markNotHelpful']);
+    Route::post('/{listingId}/reviews/{reviewId}/reply', [EquipmentReviewController::class, 'sellerReply']);
     Route::post('/{id}/sold', [EquipmentController::class, 'markSold']);
     Route::post('/{id}/view', [EquipmentController::class, 'trackView']);
     Route::get('/{id}/analytics', [EquipmentController::class, 'analytics']);
@@ -539,6 +552,15 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             Route::post('/reconcile', [FinancialTransactionController::class, 'reconcile']);
         });
 
+        // Financial Categories
+        Route::prefix('financial-categories')->group(function () {
+            Route::get('/', [FinancialCategoryController::class, 'index']);
+            Route::post('/', [FinancialCategoryController::class, 'store']);
+            Route::get('/{id}', [FinancialCategoryController::class, 'show']);
+            Route::put('/{id}', [FinancialCategoryController::class, 'update']);
+            Route::delete('/{id}', [FinancialCategoryController::class, 'destroy']);
+        });
+
         // Invoice Utility Routes (for service invoice creation)
         Route::get('/invoice-users-dropdown', [\App\Http\Controllers\Api\InvoiceUtilityController::class, 'getUsersForInvoiceDropdown']);
         Route::get('/invoice-service-templates', [\App\Http\Controllers\Api\InvoiceUtilityController::class, 'getServiceTemplates']);
@@ -556,6 +578,16 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/approve', [\App\Http\Controllers\Api\ExpenseController::class, 'approve']);
             Route::post('/{id}/reject', [\App\Http\Controllers\Api\ExpenseController::class, 'reject']);
             Route::post('/{id}/mark-paid', [\App\Http\Controllers\Api\ExpenseController::class, 'markAsPaid']);
+        });
+
+        // API Key Management (moved outside admin-dashboard for direct access)
+        Route::prefix('api-keys')->group(function () {
+            Route::get('/', [ApiKeyController::class, 'index']);
+            Route::post('/', [ApiKeyController::class, 'store']);
+            Route::get('/{apiKey}', [ApiKeyController::class, 'show']);
+            Route::put('/{apiKey}', [ApiKeyController::class, 'update']);
+            Route::delete('/{apiKey}', [ApiKeyController::class, 'destroy']);
+            Route::post('/{apiKey}/test', [ApiKeyController::class, 'test']);
         });
 
         // Admin Dashboard Routes
@@ -589,16 +621,6 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
                 Route::put('/{id}', [NewsLetterTemplateController::class, 'update']);
                 Route::delete('/{id}', [NewsLetterTemplateController::class, 'destroy']);
                 Route::post('/{id}/duplicate', [NewsLetterTemplateController::class, 'duplicate']);
-            });
-
-            // API Key Management
-            Route::prefix('api-keys')->group(function () {
-                Route::get('/', [ApiKeyController::class, 'index']);
-                Route::post('/', [ApiKeyController::class, 'store']);
-                Route::get('/{apiKey}', [ApiKeyController::class, 'show']);
-                Route::put('/{apiKey}', [ApiKeyController::class, 'update']);
-                Route::delete('/{apiKey}', [ApiKeyController::class, 'destroy']);
-                Route::post('/{apiKey}/test', [ApiKeyController::class, 'test']);
             });
         });
 

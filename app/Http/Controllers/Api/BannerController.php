@@ -153,7 +153,7 @@ class BannerController extends Controller
                 'priority' => 'nullable|integer|min:0',
                 'status' => 'nullable|in:active,inactive,expired',
                 'start_date' => 'nullable|date',
-                'end_date' => 'nullable|date',
+                'end_date' => 'nullable|date|after_or_equal:start_date',
                 'media_type' => 'nullable|in:image,video',
                 'customer_id' => 'nullable|integer',
                 'banner_charge' => 'nullable|numeric|min:0',
@@ -173,6 +173,12 @@ class BannerController extends Controller
                 unset($validated['banner_charge']);
             }
 
+            // Map customer_id to purchaser_id (if customer_id is sent, use it as purchaser_id)
+            if (isset($validated['customer_id'])) {
+                $validated['purchaser_id'] = $validated['customer_id'];
+                unset($validated['customer_id']);
+            }
+
             $validated['created_by'] = Auth::user()->profile->id;
             $validated['priority'] = $validated['priority'] ?? 1;
             $validated['media_type'] = $validated['media_type'] ?? 'image';
@@ -185,7 +191,7 @@ class BannerController extends Controller
             $validated['purchase_status'] = 'paid';
             $validated['user_target'] = 'all';
             $validated['banner_type'] = Banner::TYPE_PROMOTIONAL;
-            $validated['start_date'] = now();
+            $validated['start_date'] = $validated['start_date'] ?? now();
 
             $banner = Banner::create($validated);
 
@@ -194,7 +200,18 @@ class BannerController extends Controller
                 'message' => 'Banner created successfully',
                 'data' => $banner,
             ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
+            \Log::error('Banner creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create banner',
@@ -253,11 +270,11 @@ class BannerController extends Controller
                 'priority' => 'sometimes|integer|min:0',
                 'status' => 'sometimes|in:active,inactive,expired',
                 'start_date' => 'sometimes|date',
-                'end_date' => 'sometimes|date',
+                'end_date' => 'sometimes|date|after_or_equal:start_date',
                 'media_type' => 'sometimes|in:image,video',
-                'customer_id' => 'sometimes|integer',
+                'customer_id' => 'sometimes|nullable|integer',
                 'banner_charge' => 'sometimes|numeric|min:0',
-                'purchaser_id' => 'sometimes|integer',
+                'purchaser_id' => 'sometimes|nullable|integer',
                 'purchase_price' => 'sometimes|numeric|min:0',
             ]);
 
@@ -273,6 +290,12 @@ class BannerController extends Controller
                 unset($validated['banner_charge']);
             }
 
+            // Map customer_id to purchaser_id (if customer_id is sent, use it as purchaser_id)
+            if (isset($validated['customer_id'])) {
+                $validated['purchaser_id'] = $validated['customer_id'];
+                unset($validated['customer_id']);
+            }
+
             $banner->update($validated);
 
             return response()->json([
@@ -280,7 +303,19 @@ class BannerController extends Controller
                 'message' => 'Banner updated successfully',
                 'data' => $banner->fresh(),
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
+            \Log::error('Banner update failed', [
+                'banner_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update banner',

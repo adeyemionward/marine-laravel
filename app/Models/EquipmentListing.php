@@ -119,6 +119,16 @@ class EquipmentListing extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(EquipmentReview::class);
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->hasMany(EquipmentReview::class)->where('status', 'approved');
+    }
+
     // Scopes
     public function scopeActive(Builder $query): Builder
     {

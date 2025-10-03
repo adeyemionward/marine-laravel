@@ -14,10 +14,21 @@ class ApiKeyController extends Controller
     public function index(): JsonResponse
     {
         try {
-            $apiKeys = ApiKey::select([
-                'id', 'name', 'service', 'status', 'description',
-                'last_tested_at', 'test_result', 'created_at', 'updated_at'
-            ])->orderBy('created_at', 'desc')->get();
+            $apiKeys = ApiKey::orderBy('created_at', 'desc')->get()->map(function($key) {
+                return [
+                    'id' => $key->id,
+                    'key_name' => $key->name,
+                    'key_type' => $key->service,
+                    'encrypted_key' => $key->decrypted_api_key ?? '••••••••',
+                    'is_active' => $key->status === 'active',
+                    'status' => $key->status,
+                    'description' => $key->description,
+                    'last_tested_at' => $key->last_tested_at,
+                    'test_result' => $key->test_result,
+                    'created_at' => $key->created_at,
+                    'updated_at' => $key->updated_at
+                ];
+            });
 
             return response()->json([
                 'success' => true,
@@ -34,7 +45,22 @@ class ApiKeyController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        // Support both frontend naming (key_name, key_type, encrypted_key)
+        // and backend naming (name, service, api_key)
+        $data = $request->all();
+
+        // Map frontend field names to backend field names
+        $mappedData = [
+            'name' => $data['keyName'] ?? $data['key_name'] ?? $data['name'] ?? null,
+            'service' => $data['keyType'] ?? $data['key_type'] ?? $data['service'] ?? null,
+            'api_key' => $data['encryptedKey'] ?? $data['encrypted_key'] ?? $data['api_key'] ?? null,
+            'secret_key' => $data['secret_key'] ?? null,
+            'config' => $data['config'] ?? null,
+            'description' => $data['description'] ?? null,
+            'status' => 'active', // Default to active
+        ];
+
+        $validator = Validator::make($mappedData, [
             'name' => 'required|string|max:255',
             'service' => 'required|string|max:255',
             'api_key' => 'required|string',
@@ -53,12 +79,24 @@ class ApiKeyController extends Controller
         }
 
         try {
-            $apiKey = ApiKey::create($request->all());
+            $apiKey = ApiKey::create($mappedData);
+
+            // Return data in frontend-expected format
+            $responseData = [
+                'id' => $apiKey->id,
+                'key_name' => $apiKey->name,
+                'key_type' => $apiKey->service,
+                'encrypted_key' => $apiKey->decrypted_api_key,
+                'is_active' => $apiKey->status === 'active',
+                'description' => $apiKey->description,
+                'created_at' => $apiKey->created_at,
+                'updated_at' => $apiKey->updated_at
+            ];
 
             return response()->json([
                 'success' => true,
                 'message' => 'API key created successfully',
-                'data' => $apiKey->makeHidden(['api_key', 'secret_key'])
+                'data' => $responseData
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -87,7 +125,43 @@ class ApiKeyController extends Controller
 
     public function update(Request $request, ApiKey $apiKey): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        $data = $request->all();
+
+        // Map frontend field names to backend field names
+        $mappedData = [];
+
+        if (isset($data['key_name'])) {
+            $mappedData['name'] = $data['key_name'];
+        }
+        if (isset($data['keyName'])) {
+            $mappedData['name'] = $data['keyName'];
+        }
+        if (isset($data['key_type'])) {
+            $mappedData['service'] = $data['key_type'];
+        }
+        if (isset($data['keyType'])) {
+            $mappedData['service'] = $data['keyType'];
+        }
+        if (isset($data['encrypted_key'])) {
+            $mappedData['api_key'] = $data['encrypted_key'];
+        }
+        if (isset($data['encryptedKey'])) {
+            $mappedData['api_key'] = $data['encryptedKey'];
+        }
+        if (isset($data['is_active'])) {
+            $mappedData['status'] = $data['is_active'] ? 'active' : 'inactive';
+        }
+        if (isset($data['secret_key'])) {
+            $mappedData['secret_key'] = $data['secret_key'];
+        }
+        if (isset($data['description'])) {
+            $mappedData['description'] = $data['description'];
+        }
+        if (isset($data['config'])) {
+            $mappedData['config'] = $data['config'];
+        }
+
+        $validator = Validator::make($mappedData, [
             'name' => 'sometimes|required|string|max:255',
             'service' => 'sometimes|required|string|max:255',
             'api_key' => 'sometimes|required|string',
@@ -106,12 +180,25 @@ class ApiKeyController extends Controller
         }
 
         try {
-            $apiKey->update($request->all());
+            $apiKey->update($mappedData);
+            $apiKey->refresh();
+
+            // Return data in frontend-expected format
+            $responseData = [
+                'id' => $apiKey->id,
+                'key_name' => $apiKey->name,
+                'key_type' => $apiKey->service,
+                'encrypted_key' => $apiKey->decrypted_api_key,
+                'is_active' => $apiKey->status === 'active',
+                'description' => $apiKey->description,
+                'created_at' => $apiKey->created_at,
+                'updated_at' => $apiKey->updated_at
+            ];
 
             return response()->json([
                 'success' => true,
                 'message' => 'API key updated successfully',
-                'data' => $apiKey->makeHidden(['api_key', 'secret_key'])
+                'data' => $responseData
             ]);
         } catch (\Exception $e) {
             return response()->json([
