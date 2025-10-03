@@ -177,14 +177,31 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/user/dashboard', [UserController::class, 'dashboardOverview']);
 
     // Equipment CRUD operations
-    Route::post('/equipment', [EquipmentController::class, 'store']);
-    Route::put('/equipment/{id}', [EquipmentController::class, 'update']);
-    Route::delete('/equipment/{id}', [EquipmentController::class, 'destroy']);
-    Route::post('/equipment/{id}/images', [EquipmentController::class, 'uploadImages']);
-    Route::post('/equipment/{id}/favorite', [EquipmentController::class, 'toggleFavorite']);
-    Route::post('/equipment/{id}/sold', [EquipmentController::class, 'markSold']);
-    Route::post('/equipment/{id}/view', [EquipmentController::class, 'trackView']);
-    Route::get('/equipment/{id}/analytics', [EquipmentController::class, 'analytics']);
+    Route::group(['prefix' => '/equipment', 'as' => 'equipment.'], function () {
+    Route::post('/', [EquipmentController::class, 'store']);
+    Route::put('/{id}', [EquipmentController::class, 'update']);
+    Route::delete('/{id}', [EquipmentController::class, 'destroy']);
+    Route::post('/{id}/images', [EquipmentController::class, 'uploadImages']);
+    Route::post('/{id}/favorite', [EquipmentController::class, 'toggleFavorite']);
+    Route::post('/{id}/sold', [EquipmentController::class, 'markSold']);
+    Route::post('/{id}/view', [EquipmentController::class, 'trackView']);
+    Route::get('/{id}/analytics', [EquipmentController::class, 'analytics']);
+
+    // Static routes first
+    Route::get('/fetchFavoriteItems', [EquipmentController::class, 'fetchFavoriteItems']);
+    Route::post('/addFavoriteItem', [EquipmentController::class, 'addFavoriteItem']);
+    Route::post('/removeFavoriteItem', [EquipmentController::class, 'removeFavoriteItem']);
+
+    // Static routes first
+    Route::get('/fetchReview', [EquipmentController::class, 'fetchReview']);
+    Route::post('/addReview', [EquipmentController::class, 'addReview']);
+    Route::get('/showReview/{id}', [EquipmentController::class, 'showReview']);
+    Route::get('/destroyReview/{id}', [EquipmentController::class, 'destroyReview']);
+
+    // Dynamic numeric route last
+    Route::get('/{id}', [EquipmentController::class, 'show'])->whereNumber('id');
+});
+
 
     // Messaging
     Route::get('/conversations', [ConversationController::class, 'index']);

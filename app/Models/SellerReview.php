@@ -63,14 +63,14 @@ class SellerReview extends Model
     }
 
     // Boot method to update seller rating when review is created/updated/deleted
-    protected static function booted()
-    {
-        static::saved(function ($review) {
-            $review->seller->updateRating();
-        });
+    // protected static function booted()
+    // {
+    //     static::saved(function ($review) {
+    //         $review->seller->updateRating();
+    //     });
 
-        static::deleted(function ($review) {
-            $review->seller->updateRating();
-        });
-    }
+    //     static::deleted(function ($review) {
+    //         $review->seller->updateRating();
+    //     });
+    // }
 }

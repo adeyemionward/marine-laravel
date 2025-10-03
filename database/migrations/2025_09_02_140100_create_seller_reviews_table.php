@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('seller_reviews', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('seller_id')->constrained('seller_profiles')->cascadeOnDelete();
+            $table->foreignId('seller_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('reviewer_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('listing_id')->nullable()->constrained('equipment_listings')->nullOnDelete();
             $table->integer('rating'); // 1-5 stars
