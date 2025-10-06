@@ -13,77 +13,64 @@ class BannerController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = Banner::active()->paid();
+            $query = Banner::query();
 
-            // Filter by display context (homepage, category, etc.)
-            if ($request->has('context')) {
-                $query->forContext($request->input('context'));
-            }
-
-            // Filter by position (hero, category_row, etc.)
+            // Filter by position if provided
             if ($request->has('position')) {
-                $query->forPosition($request->input('position'));
+                $query->where('position', $request->position);
             }
 
-            // Filter by banner type
-            if ($request->has('type')) {
-                $query->forBannerType($request->input('type'));
+            // Filter by active status if requested
+            if ($request->has('active') && $request->active === 'true') {
+                $query->where('status', 'active')
+                    ->where(function ($q) {
+                        $q->whereNull('start_date')
+                          ->orWhere('start_date', '<=', now());
+                    })
+                    ->where(function ($q) {
+                        $q->whereNull('end_date')
+                          ->orWhere('end_date', '>=', now());
+                    });
             }
 
-            // Filter by device type
-            if ($request->has('device')) {
-                $query->forDevice($request->input('device'));
+            // Filter by limit if provided
+            $limit = $request->input('limit');
+
+            // Order by priority (higher first) then created_at descending
+            $query->orderBy('priority', 'desc')
+                  ->orderBy('created_at', 'desc');
+
+            if ($limit) {
+                $query->limit($limit);
             }
 
-            // Filter by category
-            if ($request->has('category_id')) {
-                $query->forCategory($request->input('category_id'));
-            }
-
-            // Exclude banners that have reached their limits
-            $query->where(function($q) {
-                $q->whereNull('max_impressions')
-                  ->orWhereRaw('impression_count < max_impressions');
+            $banners = $query->get()->map(function ($banner) {
+                return [
+                    'id' => $banner->id,
+                    'title' => $banner->title,
+                    'description' => $banner->description,
+                    'media_type' => $banner->media_type,
+                    'media_url' => $banner->media_url,
+                    'link_url' => $banner->link_url,
+                    'banner_position' => $banner->position,
+                    'priority' => $banner->priority,
+                    'status' => $banner->status,
+                    'start_date' => $banner->start_date,
+                    'end_date' => $banner->end_date,
+                    'banner_charge' => $banner->purchase_price,
+                    'customer_id' => $banner->purchaser_id,
+                    'payment_status' => $banner->payment_status,
+                    'impression_count' => $banner->impression_count ?? 0,
+                    'click_count' => $banner->click_count ?? 0,
+                    'button_text' => $banner->button_text ?? 'Shop Now',
+                    'created_at' => $banner->created_at,
+                    'updated_at' => $banner->updated_at,
+                ];
             });
-
-            $query->where(function($q) {
-                $q->whereNull('max_clicks')
-                  ->orWhereRaw('click_count < max_clicks');
-            });
-
-            $banners = $query
-                ->byPriority()
-                ->with('targetCategory')
-                ->get([
-                    'id',
-                    'title',
-                    'description',
-                    'media_type',
-                    'media_url',
-                    'link_url',
-                    'banner_type',
-                    'position',
-                    'priority',
-                    'banner_size',
-                    'dimensions',
-                    'mobile_dimensions',
-                    'display_context',
-                    'background_color',
-                    'text_color',
-                    'button_text',
-                    'button_color',
-                    'overlay_settings',
-                    'target_category_id',
-                    'start_date',
-                    'end_date'
-                ]);
-
-            // Group banners by position for easier frontend consumption
-            $groupedBanners = $banners->groupBy('position');
 
             return response()->json([
                 'success' => true,
-                'data' => $groupedBanners,
+                'data' => $banners,
                 'total' => $banners->count(),
             ]);
         } catch (\Exception $e) {
@@ -269,13 +256,13 @@ class BannerController extends Controller
                 'banner_position' => 'sometimes|string',
                 'priority' => 'sometimes|integer|min:0',
                 'status' => 'sometimes|in:active,inactive,expired',
-                'start_date' => 'sometimes|date',
-                'end_date' => 'sometimes|date|after_or_equal:start_date',
+                'start_date' => 'sometimes|nullable|date',
+                'end_date' => 'sometimes|nullable|date|after_or_equal:start_date',
                 'media_type' => 'sometimes|in:image,video',
                 'customer_id' => 'sometimes|nullable|integer',
-                'banner_charge' => 'sometimes|numeric|min:0',
+                'banner_charge' => 'sometimes|nullable|numeric|min:0',
                 'purchaser_id' => 'sometimes|nullable|integer',
-                'purchase_price' => 'sometimes|numeric|min:0',
+                'purchase_price' => 'sometimes|nullable|numeric|min:0',
             ]);
 
             // Map banner_position to position field

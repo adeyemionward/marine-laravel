@@ -7,7 +7,11 @@ use App\Services\FileStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
-class CloudinaryController extends Controller
+/**
+ * File Upload Controller
+ * Handles image and file uploads using Laravel's native storage system
+ */
+class FileUploadController extends Controller
 {
     private $fileStorageService;
 
@@ -58,7 +62,7 @@ class CloudinaryController extends Controller
         ini_set('memory_limit', '256M');
         ini_set('max_execution_time', '300');
 
-        \Log::info('CloudinaryController::uploadImage START', [
+        \Log::info('FileUploadController::uploadImage START', [
             'method' => $request->method(),
             'url' => $request->fullUrl(),
             'headers' => $request->headers->all(),
@@ -84,7 +88,7 @@ class CloudinaryController extends Controller
                     'tags' => 'string'
                 ]);
             } catch (\Illuminate\Validation\ValidationException $e) {
-                \Log::error('CloudinaryController validation failed', [
+                \Log::error('FileUploadController validation failed', [
                     'errors' => $e->errors(),
                     'request_data' => $request->all()
                 ]);
@@ -95,7 +99,7 @@ class CloudinaryController extends Controller
             $options = $request->only(['public_id', 'tags']);
             
             if ($request->hasFile('image')) {
-                \Log::info('CloudinaryController: About to call fileStorageService->uploadImage', [
+                \Log::info('FileUploadController: About to call fileStorageService->uploadImage', [
                     'folder' => $folder,
                     'options' => $options,
                     'service_exists' => isset($this->fileStorageService),
@@ -112,7 +116,7 @@ class CloudinaryController extends Controller
                     $options
                 );
 
-                \Log::info('CloudinaryController: fileStorageService->uploadImage completed', [
+                \Log::info('FileUploadController: fileStorageService->uploadImage completed', [
                     'result' => $result
                 ]);
 
@@ -135,7 +139,7 @@ class CloudinaryController extends Controller
                 'message' => 'No image file provided'
             ], 400);
         } catch (\Exception $e) {
-            \Log::error('CloudinaryController::uploadImage error', [
+            \Log::error('FileUploadController::uploadImage error', [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -187,7 +191,7 @@ class CloudinaryController extends Controller
     }
 
     /**
-     * Delete image from Cloudinary
+     * Delete image from storage
      */
     public function deleteImage(Request $request): JsonResponse
     {
@@ -213,7 +217,7 @@ class CloudinaryController extends Controller
     }
 
     /**
-     * Delete multiple images from Cloudinary
+     * Delete multiple images from storage
      */
     public function deleteMultipleImages(Request $request): JsonResponse
     {

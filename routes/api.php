@@ -14,7 +14,7 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\SellerController;
-use App\Http\Controllers\Api\CloudinaryController;
+use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\Communication\EmailConfigController;
 use App\Http\Controllers\Api\Communication\NewsLetterController;
 use App\Http\Controllers\Api\Communication\NewsLetterTemplateController;
@@ -289,15 +289,26 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/my-requests', [BannerPurchaseController::class, 'getUserPurchaseRequests']);
     });
 
-    // Cloudinary image management
+    // File upload management (using Laravel native storage)
+    Route::prefix('uploads')->group(function () {
+        Route::post('/signature', [FileUploadController::class, 'getUploadSignature']);
+        Route::post('/image', [FileUploadController::class, 'uploadImage']);
+        Route::post('/images', [FileUploadController::class, 'uploadMultipleImages']);
+        Route::delete('/image', [FileUploadController::class, 'deleteImage']);
+        Route::delete('/images', [FileUploadController::class, 'deleteMultipleImages']);
+        Route::get('/url', [FileUploadController::class, 'getOptimizedUrl']);
+        Route::get('/urls', [FileUploadController::class, 'getMultipleUrls']);
+    });
+
+    // Legacy Cloudinary routes (for backward compatibility)
     Route::prefix('cloudinary')->group(function () {
-        Route::post('/signature', [CloudinaryController::class, 'getUploadSignature']);
-        Route::post('/upload', [CloudinaryController::class, 'uploadImage']);
-        Route::post('/upload-multiple', [CloudinaryController::class, 'uploadMultipleImages']);
-        Route::delete('/image', [CloudinaryController::class, 'deleteImage']);
-        Route::delete('/images', [CloudinaryController::class, 'deleteMultipleImages']);
-        Route::get('/url', [CloudinaryController::class, 'getOptimizedUrl']);
-        Route::get('/urls', [CloudinaryController::class, 'getMultipleUrls']);
+        Route::post('/signature', [FileUploadController::class, 'getUploadSignature']);
+        Route::post('/upload', [FileUploadController::class, 'uploadImage']);
+        Route::post('/upload-multiple', [FileUploadController::class, 'uploadMultipleImages']);
+        Route::delete('/image', [FileUploadController::class, 'deleteImage']);
+        Route::delete('/images', [FileUploadController::class, 'deleteMultipleImages']);
+        Route::get('/url', [FileUploadController::class, 'getOptimizedUrl']);
+        Route::get('/urls', [FileUploadController::class, 'getMultipleUrls']);
     });
 
     // Admin routes

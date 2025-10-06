@@ -19,10 +19,15 @@ class FinancialTransactionController extends Controller
     public function getSummary(Request $request): JsonResponse
     {
         try {
-            $dateRange = $request->get('date_range', '30'); // Default 30 days
-            $startDate = Carbon::now()->subDays($dateRange)->startOfDay();
+            $dateRange = $request->get('date_range'); // No default, show all if not specified
 
-            $transactions = FinancialTransaction::where('transaction_date', '>=', $startDate);
+            $transactions = FinancialTransaction::query();
+
+            // Only apply date filter if date_range is specified
+            if ($dateRange !== null && $dateRange !== 'all') {
+                $startDate = Carbon::now()->subDays($dateRange)->startOfDay();
+                $transactions = $transactions->where('transaction_date', '>=', $startDate);
+            }
 
             $summary = [
                 'total_income' => $transactions->clone()->where('transaction_type', 'income')->sum('amount'),
@@ -131,7 +136,7 @@ class FinancialTransactionController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'transaction_type' => 'required|in:income,expense',
-                'category' => 'required|string',
+                'category' => 'required|string|max:100',
                 'amount' => 'required|numeric|min:0',
                 'description' => 'required|string|max:1000',
                 'notes' => 'nullable|string|max:2000',
@@ -198,7 +203,7 @@ class FinancialTransactionController extends Controller
 
             $validator = Validator::make($request->all(), [
                 'transaction_type' => 'required|in:income,expense',
-                'category' => 'required|string',
+                'category' => 'required|string|max:100',
                 'amount' => 'required|numeric|min:0',
                 'description' => 'required|string|max:1000',
                 'notes' => 'nullable|string|max:2000',
