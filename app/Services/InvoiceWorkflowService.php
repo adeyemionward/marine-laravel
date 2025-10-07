@@ -51,7 +51,7 @@ class InvoiceWorkflowService
                 'discount_amount' => 0,
                 'total_amount' => $totalAmount,
                 'status' => 'pending',
-                'invoice_type' => 'seller_subscription',
+                'invoice_type' => 'subscription',
                 'tax_rate' => $taxRate,
                 'due_date' => now()->addDays(14), // 14 days to pay
                 'items' => [
@@ -79,7 +79,7 @@ class InvoiceWorkflowService
             ]);
 
             DB::commit();
-            
+
             return $invoice;
 
         } catch (\Exception $e) {
@@ -297,7 +297,7 @@ class InvoiceWorkflowService
     private function activateSellerProfile(SellerApplication $application): void
     {
         $user = $application->user;
-        
+
         // Ensure seller profile exists and is active
         if ($user->sellerProfile) {
             $user->sellerProfile->update([
@@ -422,7 +422,7 @@ class InvoiceWorkflowService
     public function generateRenewalInvoicesForExpiringSubscriptions(): int
     {
         $count = 0;
-        
+
         // Get subscriptions expiring in 7 days
         $expiringSubscriptions = Subscription::active()
             ->where('expires_at', '<=', now()->addDays(7))
@@ -451,7 +451,7 @@ class InvoiceWorkflowService
     public function processExpiredSubscriptions(): int
     {
         $count = 0;
-        
+
         $expiredSubscriptions = Subscription::where('status', 'active')
             ->where('expires_at', '<=', now())
             ->with(['user'])

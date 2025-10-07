@@ -405,4 +405,187 @@ class FinancialTransactionController extends Controller
             ], 500);
         }
     }
+
+    public function getMonthlyReport(Request $request): JsonResponse
+    {
+        try {
+            $month = $request->get('month', now()->month);
+            $year = $request->get('year', now()->year);
+
+            // Get start and end dates for the month
+            $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
+            $endDate = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
+
+            // Get all transactions for the month
+            $transactions = FinancialTransaction::whereBetween('transaction_date', [$startDate, $endDate])
+                ->orderBy('transaction_date', 'desc')
+                ->get();
+
+            // Calculate totals
+            $totalIncome = $transactions->where('transaction_type', 'income')->sum('amount');
+            $totalExpenses = $transactions->where('transaction_type', 'expense')->sum('amount');
+            $netProfit = $totalIncome - $totalExpenses;
+
+            // Group by category for income
+            $incomeByCategory = $transactions->where('transaction_type', 'income')
+                ->groupBy('category')
+                ->map(function ($items) {
+                    return [
+                        'category' => $items->first()->category ?? 'Uncategorized',
+                        'total' => $items->sum('amount'),
+                        'count' => $items->count()
+                    ];
+                })->values()->sortByDesc('total');
+
+            // Group by category for expenses
+            $expensesByCategory = $transactions->where('transaction_type', 'expense')
+                ->groupBy('category')
+                ->map(function ($items) {
+                    return [
+                        'category' => $items->first()->category ?? 'Uncategorized',
+                        'total' => $items->sum('amount'),
+                        'count' => $items->count()
+                    ];
+                })->values()->sortByDesc('total');
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'period' => [
+                        'month' => $month,
+                        'year' => $year,
+                        'monthName' => $startDate->format('F'),
+                        'startDate' => $startDate->toDateString(),
+                        'endDate' => $endDate->toDateString()
+                    ],
+                    'executive_summary' => [
+                        'total_income' => $totalIncome,
+                        'total_expenses' => $totalExpenses,
+                        'net_profit' => $netProfit,
+                        'transaction_count' => $transactions->count()
+                    ],
+                    'income_analysis' => [
+                        'categories' => $incomeByCategory,
+                        'top_income_sources' => $incomeByCategory->take(5)
+                    ],
+                    'expense_analysis' => [
+                        'categories' => $expensesByCategory,
+                        'top_expense_categories' => $expensesByCategory->take(5)
+                    ],
+                    'detailed_transactions' => $transactions->map(function ($t) {
+                        return [
+                            'id' => $t->id,
+                            'date' => $t->transaction_date,
+                            'type' => $t->transaction_type,
+                            'category' => $t->category ?? 'Uncategorized',
+                            'description' => $t->description,
+                            'amount' => $t->amount
+                        ];
+                    })
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate monthly report: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getAnnualReport(Request $request): JsonResponse
+    {
+        try {
+            $year = $request->get('year', now()->year);
+
+            // Get start and end dates for the year
+            $startDate = \Carbon\Carbon::create($year, 1, 1)->startOfYear();
+            $endDate = \Carbon\Carbon::create($year, 12, 31)->endOfYear();
+
+            // Get all transactions for the year
+            $transactions = FinancialTransaction::whereBetween('transaction_date', [$startDate, $endDate])
+                ->orderBy('transaction_date', 'desc')
+                ->get();
+
+            // Calculate totals
+            $totalIncome = $transactions->where('transaction_type', 'income')->sum('amount');
+            $totalExpenses = $transactions->where('transaction_type', 'expense')->sum('amount');
+            $netProfit = $totalIncome - $totalExpenses;
+
+            // Calculate quarterly breakdown
+            $quarterlyBreakdown = [];
+            for ($q = 1; $q <= 4; $q++) {
+                $quarterStart = \Carbon\Carbon::create($year, ($q - 1) * 3 + 1, 1)->startOfMonth();
+                $quarterEnd = \Carbon\Carbon::create($year, $q * 3, 1)->endOfMonth();
+
+                $quarterTransactions = $transactions->whereBetween('transaction_date', [$quarterStart, $quarterEnd]);
+                $quarterIncome = $quarterTransactions->where('transaction_type', 'income')->sum('amount');
+                $quarterExpenses = $quarterTransactions->where('transaction_type', 'expense')->sum('amount');
+
+                $quarterlyBreakdown[] = [
+                    'quarter' => "Q{$q}",
+                    'total_income' => $quarterIncome,
+                    'total_expenses' => $quarterExpenses,
+                    'net_profit' => $quarterIncome - $quarterExpenses
+                ];
+            }
+
+            // Group by category
+            $incomeByCategory = $transactions->where('transaction_type', 'income')
+                ->groupBy('category')
+                ->map(function ($items) {
+                    return [
+                        'category' => $items->first()->category ?? 'Uncategorized',
+                        'total' => $items->sum('amount'),
+                        'count' => $items->count()
+                    ];
+                })->values()->sortByDesc('total');
+
+            $expensesByCategory = $transactions->where('transaction_type', 'expense')
+                ->groupBy('category')
+                ->map(function ($items) {
+                    return [
+                        'category' => $items->first()->category ?? 'Uncategorized',
+                        'total' => $items->sum('amount'),
+                        'count' => $items->count()
+                    ];
+                })->values()->sortByDesc('total');
+
+            // Calculate financial health metrics
+            $profitMargin = $totalIncome > 0 ? round(($netProfit / $totalIncome) * 100, 2) : 0;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'year' => $year,
+                    'executive_summary' => [
+                        'total_income' => $totalIncome,
+                        'total_expenses' => $totalExpenses,
+                        'net_profit' => $netProfit,
+                        'transaction_count' => $transactions->count()
+                    ],
+                    'quarterly_breakdown' => $quarterlyBreakdown,
+                    'income_analysis' => [
+                        'categories' => $incomeByCategory,
+                        'top_income_sources' => $incomeByCategory->take(5)
+                    ],
+                    'expense_analysis' => [
+                        'categories' => $expensesByCategory,
+                        'top_expense_categories' => $expensesByCategory->take(5)
+                    ],
+                    'financial_health_metrics' => [
+                        'profitability_ratio' => $profitMargin,
+                        'income_growth' => 0, // Can be calculated if we have previous year data
+                        'expense_ratio' => $totalIncome > 0 ? round(($totalExpenses / $totalIncome) * 100, 2) : 0
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate annual report: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

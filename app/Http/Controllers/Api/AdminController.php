@@ -63,7 +63,7 @@ class AdminController extends Controller
     {
         try {
             $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
-            
+
             $listing->update([
                 'status' => 'active',
                 'is_verified' => true,
@@ -91,7 +91,7 @@ class AdminController extends Controller
             ]);
 
             $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
-            
+
             $listing->update([
                 'status' => 'rejected',
                 'rejection_reason' => $validated['reason'] ?? null,
@@ -114,7 +114,7 @@ class AdminController extends Controller
     {
         try {
             $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
-            
+
             $listing->update([
                 'is_featured' => !$listing->is_featured,
             ]);
@@ -149,7 +149,7 @@ class AdminController extends Controller
                 // Only allow relationships that actually exist on the User model
                 $allowedIncludes = ['profile', 'subscription', 'subscriptions'];
                 $validIncludes = array_intersect($requestedIncludes, $allowedIncludes);
-                
+
                 // Map subscription to subscriptions for compatibility
                 $includes = ['profile']; // Always include profile
                 foreach ($validIncludes as $include) {
@@ -209,7 +209,7 @@ class AdminController extends Controller
                 $requestedIncludes = explode(',', $request->get('include'));
                 $allowedIncludes = ['profile', 'subscription', 'subscriptions'];
                 $validIncludes = array_intersect($requestedIncludes, $allowedIncludes);
-                
+
                 $includes = ['profile']; // Always include profile
                 foreach ($validIncludes as $include) {
                     if ($include === 'subscription') {
@@ -239,7 +239,7 @@ class AdminController extends Controller
     {
         try {
             $userProfile = UserProfile::findOrFail($id);
-            
+
             $userProfile->update([
                 'is_verified' => !$userProfile->is_verified,
                 'email_verified_at' => $userProfile->is_verified ? null : now(),
@@ -270,11 +270,11 @@ class AdminController extends Controller
             ]);
 
             $userProfile = UserProfile::findOrFail($id);
-            
+
             $userProfile->update([
                 'is_active' => !$userProfile->is_active,
                 'ban_reason' => !$userProfile->is_active ? ($validated['reason'] ?? 'Banned by admin') : null,
-                'banned_until' => !$userProfile->is_active && isset($validated['duration_days']) ? 
+                'banned_until' => !$userProfile->is_active && isset($validated['duration_days']) ?
                     now()->addDays($validated['duration_days']) : null,
             ]);
 
@@ -355,7 +355,7 @@ class AdminController extends Controller
     {
         try {
             $userProfile = UserProfile::findOrFail($id);
-            
+
             $userProfile->update([
                 'is_active' => true,
                 'ban_reason' => null,
@@ -380,7 +380,7 @@ class AdminController extends Controller
     {
         try {
             $user = User::findOrFail($id);
-            
+
             // Prevent deleting admin users
             if ($user->isAdmin()) {
                 return response()->json([
@@ -414,9 +414,9 @@ class AdminController extends Controller
             ]);
 
             $userProfile = UserProfile::findOrFail($id);
-            
+
             $updates = [];
-            
+
             switch ($validated['status']) {
                 case 'active':
                     $updates = [
@@ -464,7 +464,7 @@ class AdminController extends Controller
             ]);
 
             $userProfile = UserProfile::findOrFail($id);
-            
+
             // Prevent demoting the last admin
             if ($userProfile->role === 'admin' && $validated['role'] !== 'admin') {
                 $adminCount = UserProfile::where('role', 'admin')->count();
@@ -505,7 +505,7 @@ class AdminController extends Controller
             ]);
 
             $user = User::with('profile')->findOrFail($id);
-            
+
             // Check if user is already a seller
             if ($user->isSeller()) {
                 return response()->json([
@@ -559,7 +559,7 @@ class AdminController extends Controller
     {
         try {
             $query = $request->get('q', '');
-            
+
             if (strlen($query) < 2) {
                 return response()->json([
                     'success' => false,
@@ -846,7 +846,7 @@ class AdminController extends Controller
                 // Generate invoice automatically (default behavior)
                 $invoiceWorkflowService = app(\App\Services\InvoiceWorkflowService::class);
                 $invoice = $invoiceWorkflowService->generateSellerApprovalInvoice($application, auth()->user());
-                
+
                 $response['message'] = 'Seller application approved and invoice generated successfully';
                 $response['data']['invoice'] = [
                     'id' => $invoice->id,
@@ -879,7 +879,7 @@ class AdminController extends Controller
     private function grantImmediateSellerAccess(SellerApplication $application): void
     {
         $user = $application->user;
-        
+
         // Create active subscription without payment
         $defaultPlan = \App\Models\SubscriptionPlan::where('tier', 'basic')
             ->where('is_active', true)
@@ -922,7 +922,7 @@ class AdminController extends Controller
             ]);
 
             $application = SellerApplication::with('user')->findOrFail($validated['application_id']);
-            
+
             // Check if application is approved
             if ($application->status !== 'approved') {
                 return response()->json([
@@ -947,7 +947,7 @@ class AdminController extends Controller
             // Get subscription plan
             $planId = $validated['plan_id'] ?? null;
             $plan = null;
-            
+
             if ($planId) {
                 $plan = SubscriptionPlan::findOrFail($planId);
             } else {
@@ -982,7 +982,7 @@ class AdminController extends Controller
                 'discount_amount' => $discountAmount,
                 'total_amount' => $totalAmount,
                 'status' => 'pending',
-                'invoice_type' => 'seller_subscription',
+                'invoice_type' => 'subscription',
                 'tax_rate' => $taxRate,
                 'due_date' => $validated['due_date'] ? \Carbon\Carbon::parse($validated['due_date']) : now()->addDays(14),
                 'items' => [
@@ -1077,7 +1077,7 @@ class AdminController extends Controller
             ]);
 
             $application = SellerApplication::findOrFail($id);
-            
+
             $application->update([
                 'status' => $validated['status'],
                 'admin_notes' => $validated['notes'] ?? $application->admin_notes,
@@ -1126,7 +1126,7 @@ class AdminController extends Controller
     {
         try {
             $plan = SubscriptionPlan::findOrFail($planId);
-            
+
             // Count active subscriptions for this plan
             $activeUsersCount = Subscription::where('subscription_plan_id', $planId)
                 ->where('is_active', true)
@@ -1237,7 +1237,7 @@ class AdminController extends Controller
 
             // Check if plan has active subscriptions
             $hasActiveSubscriptions = $plan->activeSubscriptions()->exists();
-            
+
             if ($hasActiveSubscriptions) {
                 return response()->json([
                     'success' => false,
@@ -1325,7 +1325,7 @@ class AdminController extends Controller
                 'name' => $validated['name'] ?? null,
                 'email' => $validated['email'] ?? null,
             ]);
-            
+
             if (!empty($userUpdates)) {
                 $user->update($userUpdates);
             }
@@ -1364,11 +1364,11 @@ class AdminController extends Controller
             $activeUsers = UserProfile::where('is_active', true)->count();
             $inactiveUsers = UserProfile::where('is_active', false)->count();
             $suspendedUsers = UserProfile::whereNotNull('ban_reason')->count();
-            
+
             // New users this month
             $thisMonth = Carbon::now()->startOfMonth();
             $newUsersThisMonth = User::where('created_at', '>=', $thisMonth)->count();
-            
+
             // Users by role
             $usersByRole = UserProfile::selectRaw('role, COUNT(*) as count')
                 ->groupBy('role')
@@ -1479,7 +1479,7 @@ class AdminController extends Controller
             ]);
 
             $userProfile = UserProfile::findOrFail($id);
-            
+
             $updates = [
                 'is_active' => false,
                 'ban_reason' => $validated['reason'],
@@ -1509,7 +1509,7 @@ class AdminController extends Controller
     {
         try {
             $userProfile = UserProfile::findOrFail($id);
-            
+
             $userProfile->update([
                 'is_active' => true,
                 'ban_reason' => null,
@@ -1534,7 +1534,7 @@ class AdminController extends Controller
     {
         try {
             $user = User::findOrFail($id);
-            
+
             $user->update([
                 'email_verified_at' => Carbon::now(),
             ]);
@@ -1557,9 +1557,9 @@ class AdminController extends Controller
     {
         try {
             $user = User::with(['profile', 'equipmentListings', 'sellerProfile'])->findOrFail($id);
-            
+
             $activities = [];
-            
+
             // Add registration activity
             $activities[] = [
                 'type' => 'registration',
@@ -1831,7 +1831,7 @@ class AdminController extends Controller
     {
         try {
             $user = User::with('profile')->findOrFail($id);
-            
+
             // Basic permissions based on role
             $permissions = [
                 'can_create_listings' => $user->isSeller() || $user->isAdmin(),
@@ -1991,10 +1991,10 @@ class AdminController extends Controller
         try {
             $timeRange = $request->get('time_range', '30d');
             $days = (int) str_replace('d', '', $timeRange);
-            
+
             // Get comprehensive analytics data
             $metrics = $this->getSystemMetrics($request)->getData()->data;
-            
+
             // Category analytics
             $categoryStats = EquipmentListing::join('equipment_categories', 'equipment_listings.category_id', '=', 'equipment_categories.id')
                 ->select('equipment_categories.name', \DB::raw('count(*) as count'))
@@ -2054,7 +2054,7 @@ class AdminController extends Controller
     {
         try {
             $settings = SystemSetting::all();
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $settings->map(function ($setting) {
@@ -2125,7 +2125,7 @@ class AdminController extends Controller
     {
         try {
             $setting = SystemSetting::where('key', $key)->first();
-            
+
             if (!$setting) {
                 return response()->json([
                     'success' => false,
@@ -2314,7 +2314,7 @@ class AdminController extends Controller
             ]);
 
             $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
-            
+
             // Update listing status based on action
             switch ($validated['action']) {
                 case 'approve':
@@ -2359,7 +2359,7 @@ class AdminController extends Controller
             ]);
 
             $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
-            
+
             if ($listing->expires_at) {
                 $listing->expires_at = Carbon::parse($listing->expires_at)->addDays($validated['additional_days']);
             } else {
@@ -2451,13 +2451,13 @@ class AdminController extends Controller
             ]);
 
             $user = User::findOrFail($validated['user_id']);
-            
+
             // Generate a 6-digit verification code
             $verificationCode = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-            
+
             // Store the verification code (in a real app, you'd store this in database)
             // For now, we'll just return it - in production, you'd send via email
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Email verification code created successfully',
@@ -2485,7 +2485,7 @@ class AdminController extends Controller
             ]);
 
             $user = User::findOrFail($validated['user_id']);
-            
+
             // In a real implementation, you'd verify against stored code
             // For now, we'll accept any 6-digit code as valid
             if (strlen($validated['verification_code']) === 6 && is_numeric($validated['verification_code'])) {
@@ -2521,7 +2521,7 @@ class AdminController extends Controller
         try {
             // Clean and prepare request data
             $requestData = $request->all();
-            
+
             // Handle plan_id - be very flexible
             if (isset($requestData['plan_id'])) {
                 if ($requestData['plan_id'] === '' || $requestData['plan_id'] === '0' || $requestData['plan_id'] === 0 || $requestData['plan_id'] === null || empty($requestData['plan_id'])) {
@@ -2533,10 +2533,17 @@ class AdminController extends Controller
                 // If plan_id is not set at all, make it null
                 $requestData['plan_id'] = null;
             }
-            
-            // Ensure application_id is an integer
-            if (isset($requestData['application_id'])) {
+
+            // Ensure application_id is an integer or null
+            if (isset($requestData['application_id']) && $requestData['application_id']) {
                 $requestData['application_id'] = (int) $requestData['application_id'];
+            } else {
+                $requestData['application_id'] = null;
+            }
+
+            // Ensure user_id is an integer if provided
+            if (isset($requestData['user_id'])) {
+                $requestData['user_id'] = (int) $requestData['user_id'];
             }
 
             // Clean up custom_items if present
@@ -2560,14 +2567,15 @@ class AdminController extends Controller
                     $requestData['totals']['total'] = (float) $requestData['totals']['total'];
                 }
             }
-            
+
             // Provide default due_date if missing (14 days from now)
             if (empty($requestData['due_date'])) {
                 $requestData['due_date'] = now()->addDays(14)->format('Y-m-d');
             }
 
             $validated = validator($requestData, [
-                'application_id' => 'required',
+                'application_id' => 'nullable|integer|exists:seller_applications,id',
+                'user_id' => 'required_without:application_id|integer|exists:users,id',
                 'plan_id' => 'nullable',
                 'custom_items' => 'nullable|array',
                 'custom_items.*.description' => 'nullable|string|max:255',
@@ -2579,6 +2587,7 @@ class AdminController extends Controller
                 'tax_rate' => 'nullable|numeric|min:0|max:100',
                 'discount_amount' => 'nullable|numeric|min:0',
                 'discount_type' => 'nullable|string',
+                'invoice_type' => 'nullable|string|max:50',
                 'totals' => 'required|array',
                 'totals.subtotal' => 'required|numeric|min:0',
                 'totals.total' => 'required|numeric|min:0',
@@ -2587,29 +2596,32 @@ class AdminController extends Controller
             // Get the seller application - use a more flexible approach
             $application = null;
             $seller = null;
-            
-            try {
-                // Try to get from seller_applications table if it exists
-                if (class_exists('App\Models\SellerApplication')) {
-                    $application = \App\Models\SellerApplication::with('user')->find($validated['application_id']);
-                    if ($application) {
-                        $seller = $application->user;
+
+            // First, try to get application if application_id is provided
+            if (!empty($validated['application_id'])) {
+                try {
+                    if (class_exists('App\Models\SellerApplication')) {
+                        $application = \App\Models\SellerApplication::with('user')->find($validated['application_id']);
+                        if ($application) {
+                            $seller = $application->user;
+                        }
                     }
+                } catch (\Exception $e) {
+                    // Application lookup failed
                 }
-            } catch (\Exception $e) {
-                // Fallback: treat application_id as user_id
-                $seller = \App\Models\User::find($validated['application_id']);
             }
 
-            // If we still don't have a seller, try treating application_id as user_id
+            // If no seller from application, try user_id
+            if (!$seller && !empty($validated['user_id'])) {
+                $seller = \App\Models\User::find($validated['user_id']);
+            }
+
+            // Final check - if still no seller, return error
             if (!$seller) {
-                $seller = \App\Models\User::find($validated['application_id']);
-                if (!$seller) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Seller not found',
-                    ], 404);
-                }
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User or seller not found',
+                ], 404);
             }
 
             // Get plan details if plan_id is provided
@@ -2636,7 +2648,7 @@ class AdminController extends Controller
 
             // Prepare invoice items
             $items = [];
-            
+
             // Add plan as an item if selected
             if ($plan) {
                 $items[] = [
@@ -2674,7 +2686,7 @@ class AdminController extends Controller
                 'total_amount' => $totalAmount,
                 'due_date' => $validated['due_date'],
                 'status' => 'pending',
-                'invoice_type' => $application ? 'seller_application' : 'other',
+                'invoice_type' => $validated['invoice_type'] ?? ($application ? 'seller_application' : 'other'),
                 'items' => $items,
                 'notes' => $validated['notes'] ?? '',
                 'terms_and_conditions' => $validated['terms_and_conditions'] ?? 'Payment is due within 30 days of invoice date.',
@@ -2684,7 +2696,7 @@ class AdminController extends Controller
 
             // Load relationships for response
             $invoice->load(['user', 'sellerApplication', 'subscriptionPlan']);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Invoice generated successfully',
@@ -2830,13 +2842,13 @@ class AdminController extends Controller
     {
         try {
             $invoice = Invoice::with('user')->findOrFail($id);
-            
+
             // Mark as sent
             $invoice->markAsSent();
-            
+
             // In a real application, you would send the actual email here
             // For now, we'll just simulate sending
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Invoice sent successfully',
@@ -2856,10 +2868,10 @@ class AdminController extends Controller
         try {
             $invoice = Invoice::with(['user', 'sellerApplication', 'subscriptionPlan'])
                              ->findOrFail($id);
-            
+
             // In a real application, you would generate a PDF here
             // For now, we'll return a simple response
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Invoice download prepared',
@@ -2880,7 +2892,7 @@ class AdminController extends Controller
     {
         try {
             $userId = auth()->id();
-            
+
             $query = Invoice::with(['sellerApplication', 'subscriptionPlan'])
                            ->where('user_id', $userId);
 
@@ -2919,7 +2931,7 @@ class AdminController extends Controller
     {
         try {
             $userId = auth()->id();
-            
+
             $invoice = Invoice::with(['sellerApplication', 'subscriptionPlan'])
                              ->where('user_id', $userId)
                              ->findOrFail($id);
@@ -3087,7 +3099,7 @@ class AdminController extends Controller
     {
         try {
             $userId = auth()->id();
-            
+
             $validated = $request->validate([
                 'payment_reference' => 'required|string|max:255',
                 'payment_method' => 'required|string|in:bank_transfer,online_payment,mobile_money,cash,check',
@@ -3151,7 +3163,7 @@ class AdminController extends Controller
                     'payment_proof_url' => $proofUrl
                 ]
             ]);
-            
+
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -3178,14 +3190,14 @@ class AdminController extends Controller
     {
         try {
             $userId = auth()->id();
-            
+
             $invoice = Invoice::with(['sellerApplication', 'subscriptionPlan'])
                              ->where('user_id', $userId)
                              ->findOrFail($id);
-            
+
             // In a real application, you would generate a PDF here
             // For now, we'll return a simple response
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Invoice download prepared',
@@ -3232,7 +3244,7 @@ class AdminController extends Controller
                     'payment_proof_public_id' => null,
                     'payment_proof_url' => null,
                     'payment_submitted_at' => null,
-                    'notes' => $invoice->notes . "\n\nPayment proof rejected by admin: " . auth()->user()->name . " on " . now() . 
+                    'notes' => $invoice->notes . "\n\nPayment proof rejected by admin: " . auth()->user()->name . " on " . now() .
                                ($validated['notes'] ? "\nReason: " . $validated['notes'] : '')
                 ]);
 
@@ -3397,14 +3409,14 @@ class AdminController extends Controller
 
             $listing = EquipmentListing::findOrFail($listingId);
             $listing->is_featured = $request->is_featured;
-            
+
             // Set featured until date if featuring
             if ($request->is_featured) {
                 $listing->featured_until = now()->addDays(30); // Default 30 days
             } else {
                 $listing->featured_until = null;
             }
-            
+
             $listing->save();
 
             // Log the action for audit trail

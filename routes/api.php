@@ -120,6 +120,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/banners/category', [BannerController::class, 'getCategoryBanners']);
     Route::get('/banners/listing-detail', [BannerController::class, 'getListingDetailBanners']);
     Route::get('/banners/configuration', [BannerController::class, 'getConfiguration']);
+    Route::get('/banners/settings', [BannerController::class, 'getSettings']);
     Route::post('/banners/{id}/click', [BannerController::class, 'trackClick']);
     Route::post('/banners/{id}/impression', [BannerController::class, 'trackImpression']);
 
@@ -372,6 +373,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/banners/active', [BannerController::class, 'active']);
         Route::get('/banners/revenue-analytics', [AdminController::class, 'getBannerRevenueAnalytics']);
         Route::get('/banners/pricing-tiers', [AdminController::class, 'getBannerPricingTiers']);
+        Route::get('/banners/pricing', [BannerController::class, 'getPricing']);
+        Route::put('/banners/pricing', [BannerController::class, 'updatePricing']);
+        Route::put('/banners/settings', [BannerController::class, 'updateSettings']);
         Route::apiResource('banners', BannerController::class);
 
         // Banner Purchase Management
@@ -561,6 +565,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             Route::get('/monthly-trends', [FinancialTransactionController::class, 'getMonthlyTrends']);
             Route::get('/category-stats', [FinancialTransactionController::class, 'getCategoryStats']);
             Route::post('/reconcile', [FinancialTransactionController::class, 'reconcile']);
+            Route::get('/monthly-report', [FinancialTransactionController::class, 'getMonthlyReport']);
+            Route::get('/annual-report', [FinancialTransactionController::class, 'getAnnualReport']);
         });
 
         // Financial Categories

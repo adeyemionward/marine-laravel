@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Banner;
+use App\Models\BannerSetting;
+use App\Models\BannerPricing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -503,6 +505,177 @@ class BannerController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch banner configuration',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get banner settings
+     */
+    public function getSettings(): JsonResponse
+    {
+        try {
+            $settings = BannerSetting::all();
+
+            return response()->json([
+                'success' => true,
+                'data' => $settings,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch banner settings',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Update banner settings
+     */
+    public function updateSettings(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'settings' => 'required|array',
+                'settings.*.key' => 'required|string',
+                'settings.*.value' => 'required|integer|min:1000|max:30000',
+            ]);
+
+            foreach ($validated['settings'] as $setting) {
+                BannerSetting::set($setting['key'], $setting['value']);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Banner settings updated successfully',
+                'data' => BannerSetting::all(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update banner settings',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get banner pricing configuration
+     */
+    public function getPricing(): JsonResponse
+    {
+        try {
+            // Get all active pricing or create defaults if none exist
+            $pricing = BannerPricing::active()->get();
+
+            if ($pricing->isEmpty()) {
+                // Create default pricing if none exists
+                $defaults = [
+                    ['banner_type' => 'hero', 'base_price' => 50000, 'duration_type' => 'weekly', 'duration_value' => 1],
+                    ['banner_type' => 'sidebar', 'base_price' => 25000, 'duration_type' => 'weekly', 'duration_value' => 1],
+                    ['banner_type' => 'category', 'base_price' => 30000, 'duration_type' => 'weekly', 'duration_value' => 1],
+                    ['banner_type' => 'footer', 'base_price' => 15000, 'duration_type' => 'weekly', 'duration_value' => 1],
+                ];
+
+                foreach ($defaults as $default) {
+                    BannerPricing::create(array_merge($default, [
+                        'is_active' => true,
+                        'premium_multiplier' => 1.5,
+                    ]));
+                }
+
+                $pricing = BannerPricing::active()->get();
+            }
+
+            // Format pricing for frontend (hero, sidebar, category, footer)
+            $formattedPricing = [
+                'hero' => 50000,
+                'sidebar' => 25000,
+                'category' => 30000,
+                'footer' => 15000,
+            ];
+
+            foreach ($pricing as $item) {
+                $formattedPricing[$item->banner_type] = (float) $item->base_price;
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedPricing,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch banner pricing',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Update banner pricing
+     */
+    public function updatePricing(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'pricing' => 'required|array',
+                'pricing.hero' => 'required|numeric|min:0',
+                'pricing.sidebar' => 'required|numeric|min:0',
+                'pricing.category' => 'required|numeric|min:0',
+                'pricing.footer' => 'required|numeric|min:0',
+            ]);
+
+            $pricing = $validated['pricing'];
+
+            foreach ($pricing as $type => $price) {
+                BannerPricing::updateOrCreate(
+                    ['banner_type' => $type],
+                    [
+                        'base_price' => $price,
+                        'duration_type' => 'weekly',
+                        'duration_value' => 1,
+                        'is_active' => true,
+                        'premium_multiplier' => 1.5,
+                    ]
+                );
+            }
+
+            // Get updated pricing
+            $updatedPricing = BannerPricing::active()->get();
+            $formattedPricing = [
+                'hero' => 50000,
+                'sidebar' => 25000,
+                'category' => 30000,
+                'footer' => 15000,
+            ];
+
+            foreach ($updatedPricing as $item) {
+                $formattedPricing[$item->banner_type] = (float) $item->base_price;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Banner pricing updated successfully',
+                'data' => $formattedPricing,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Banner pricing update failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update banner pricing',
                 'error' => $e->getMessage(),
             ], 500);
         }
