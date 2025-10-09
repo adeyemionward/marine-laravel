@@ -3118,7 +3118,8 @@ class AdminController extends Controller
             if ($request->hasFile('payment_proof')) {
                 $fileStorageService = app(\App\Services\FileStorageService::class);
 
-                $uploadResult = $fileStorageService->uploadImage(
+                // Use uploadFile method for documents (supports PDFs and images)
+                $uploadResult = $fileStorageService->uploadFile(
                     $request->file('payment_proof'),
                     'documents', // Use documents folder
                     [
@@ -3279,6 +3280,54 @@ class AdminController extends Controller
                 'success' => false,
                 'message' => 'Failed to process payment approval',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get payment proof image for an invoice
+     */
+    public function getPaymentProof($id)
+    {
+        try {
+            $invoice = Invoice::findOrFail($id);
+
+            // Check if payment proof exists
+            if (!$invoice->payment_proof) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No payment proof found for this invoice'
+                ], 404);
+            }
+
+            // If using Cloudinary or external storage, return the URL
+            if ($invoice->payment_proof_url) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'url' => $invoice->payment_proof_url,
+                        'type' => 'url'
+                    ]
+                ]);
+            }
+
+            // If stored locally, return the file
+            $path = storage_path('app/public/payment_proofs/' . $invoice->payment_proof);
+
+            if (!file_exists($path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment proof file not found'
+                ], 404);
+            }
+
+            return response()->file($path);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve payment proof',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

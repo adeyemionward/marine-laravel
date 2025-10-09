@@ -452,6 +452,12 @@ if (!$listing) {
     public function update(Request $request, int $id): JsonResponse
     {
         try {
+            \Log::info('Equipment update request received', [
+                'id' => $id,
+                'user_id' => $request->user()?->id,
+                'data' => $request->except(['images'])
+            ]);
+
             $request->validate([
                 'title' => 'sometimes|required|string|max:255',
                 'description' => 'sometimes|required|string|max:2000',
@@ -497,12 +503,20 @@ if (!$listing) {
                 'specifications', 'contact_phone', 'contact_email', 'negotiable'
             ]));
 
+            \Log::info('Equipment update successful', ['id' => $id]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Listing updated successfully',
                 'data' => $listing->load(['category', 'seller']),
             ]);
         } catch (\Exception $e) {
+            \Log::error('Equipment update failed', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update listing',

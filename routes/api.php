@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\InvoiceUtilityController;
 use App\Http\Controllers\Api\Communication\NewsletterSettingsController;
 use App\Http\Controllers\Api\SystemMonitorController;
 use App\Http\Controllers\Api\Admin\ApiKeyController;
+use App\Http\Controllers\Api\PlatformSettingsController;
 use App\Models\EmailConfig;
 
 // Simple test route for debugging
@@ -385,6 +386,15 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             Route::post('/requests/{id}/create-banner', [BannerPurchaseController::class, 'createBannerFromRequest']);
         });
 
+        // Platform Settings - Listing Pricing & Bank Details
+        Route::prefix('platform-settings')->group(function () {
+            Route::get('/listing-pricing', [PlatformSettingsController::class, 'getListingPricing']);
+            Route::put('/listing-pricing', [PlatformSettingsController::class, 'updateListingPricing']);
+            Route::get('/bank-details', [PlatformSettingsController::class, 'getBankDetails']);
+            Route::put('/bank-details', [PlatformSettingsController::class, 'updateBankDetails']);
+            Route::post('/calculate-invoice', [PlatformSettingsController::class, 'calculateInvoice']);
+        });
+
         // System settings
         Route::get('/settings', [AdminController::class, 'settings']);
         Route::put('/settings', [AdminController::class, 'updateSettings']);
@@ -418,6 +428,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/invoices/generate-for-application', [AdminController::class, 'generateInvoiceForApplication']);
         Route::post('/invoices/{id}/send', [AdminController::class, 'sendSellerInvoice']);
         Route::get('/invoices/{id}/download', [AdminController::class, 'downloadInvoice']);
+        Route::get('/invoices/{id}/payment-proof', [AdminController::class, 'getPaymentProof']);
         Route::post('/invoices/{id}/mark-paid', [AdminController::class, 'markInvoiceAsPaid']);
         Route::post('/invoices/sync-transactions', [AdminController::class, 'syncInvoiceTransactions']);
         Route::post('/invoices/{id}/approve-payment', [AdminController::class, 'approvePayment']);

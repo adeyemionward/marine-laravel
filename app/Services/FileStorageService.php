@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Exception;
+use Illuminate\Support\Facades\Log;
 use Intervention\Image\Facades\Image;
 
 class FileStorageService
@@ -53,7 +54,16 @@ class FileStorageService
             // Get file details
             $fullPath = Storage::disk('public')->path($storagePath);
             $fileSize = Storage::disk('public')->size($storagePath);
+
+            // Generate absolute URL for the file
+            // Use config app.url to ensure correct domain on production
             $url = Storage::disk('public')->url($storagePath);
+
+            // Ensure URL is absolute (important for GoDaddy hosting)
+            if (!str_starts_with($url, 'http')) {
+                $baseUrl = rtrim(config('app.url'), '/');
+                $url = $baseUrl . $url;
+            }
 
             // Get image dimensions
             $width = null;
@@ -90,6 +100,110 @@ class FileStorageService
             ];
         } catch (Exception $e) {
             \Log::error('FileStorageService: upload failed', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Upload a single file (documents, PDFs, images, etc.)
+     */
+    public function uploadFile($file, $folder = 'general', $options = [])
+    {
+        try {
+            \Log::info('FileStorageService::uploadFile called', [
+                'folder' => $folder,
+                'file_info' => [
+                    'name' => method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'unknown',
+                    'size' => method_exists($file, 'getSize') ? $file->getSize() : 'unknown',
+                    'mime' => method_exists($file, 'getMimeType') ? $file->getMimeType() : 'unknown'
+                ]
+            ]);
+
+            // Generate unique filename
+            $originalName = method_exists($file, 'getClientOriginalName')
+                ? $file->getClientOriginalName()
+                : 'file.pdf';
+            $extension = method_exists($file, 'getClientOriginalExtension')
+                ? $file->getClientOriginalExtension()
+                : 'pdf';
+
+            $filename = Str::slug(pathinfo($originalName, PATHINFO_FILENAME))
+                . '_' . time()
+                . '_' . Str::random(8)
+                . '.' . $extension;
+
+            // Determine storage path
+            $storagePath = "{$folder}/{$filename}";
+
+            // Store the file
+            if (method_exists($file, 'storeAs')) {
+                // Laravel UploadedFile
+                $path = $file->storeAs($folder, $filename, 'public');
+            } else {
+                // Handle other file types
+                $path = Storage::disk('public')->put($storagePath, file_get_contents($file));
+            }
+
+            // Get file details
+            $fullPath = Storage::disk('public')->path($storagePath);
+            $fileSize = Storage::disk('public')->size($storagePath);
+
+            // Generate absolute URL for the file
+            $url = Storage::disk('public')->url($storagePath);
+
+            // Ensure URL is absolute (important for GoDaddy hosting)
+            if (!str_starts_with($url, 'http')) {
+                $baseUrl = rtrim(config('app.url'), '/');
+                $url = $baseUrl . $url;
+            }
+
+            // Try to get image dimensions if it's an image
+            $width = null;
+            $height = null;
+            $isImage = in_array(strtolower($extension), ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']);
+
+            if ($isImage) {
+                try {
+                    if (file_exists($fullPath)) {
+                        $imageInfo = getimagesize($fullPath);
+                        if ($imageInfo) {
+                            $width = $imageInfo[0];
+                            $height = $imageInfo[1];
+                        }
+                    }
+                } catch (Exception $e) {
+                    \Log::warning('Failed to get image dimensions', ['error' => $e->getMessage()]);
+                }
+            }
+
+            \Log::info('FileStorageService: file upload successful', [
+                'path' => $storagePath,
+                'url' => $url
+            ]);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'public_id' => $storagePath, // Keep for compatibility
+                    'path' => $storagePath,
+                    'url' => $url,
+                    'width' => $width,
+                    'height' => $height,
+                    'format' => $extension,
+                    'bytes' => $fileSize,
+                    'created_at' => now()->toIso8601String()
+                ]
+            ];
+        } catch (Exception $e) {
+            \Log::error('FileStorageService: file upload failed', [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine()
@@ -202,7 +316,15 @@ class FileStorageService
 
         try {
             if (Storage::disk('public')->exists($path)) {
-                return Storage::disk('public')->url($path);
+                $url = Storage::disk('public')->url($path);
+
+                // Ensure URL is absolute (important for GoDaddy hosting)
+                if (!str_starts_with($url, 'http')) {
+                    $baseUrl = rtrim(config('app.url'), '/');
+                    $url = $baseUrl . $url;
+                }
+
+                return $url;
             }
             return null;
         } catch (Exception $e) {
