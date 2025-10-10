@@ -25,6 +25,10 @@ class PlatformSettingsController extends Controller
                     // Priority Listing
                     'priority_listing' => (float) $this->getSetting('pricing_priority_listing', 30000),
                     'basic_listing' => (float) $this->getSetting('pricing_basic_listing', 0),
+                    // Priority Listing Levels
+                    'priority_standard' => (float) $this->getSetting('pricing_priority_standard', 5000),
+                    'priority_high' => (float) $this->getSetting('pricing_priority_high', 10000),
+                    'priority_premium' => (float) $this->getSetting('pricing_priority_premium', 20000),
                     // Listing Promotions (daily rates)
                     'promotion_boost' => (float) $this->getSetting('pricing_promotion_boost', 3000),
                     'promotion_spotlight' => (float) $this->getSetting('pricing_promotion_spotlight', 5000),
@@ -62,6 +66,9 @@ class PlatformSettingsController extends Controller
                 'pricing.featured_listing_homepage' => 'required|numeric|min:0',
                 'pricing.priority_listing' => 'required|numeric|min:0',
                 'pricing.basic_listing' => 'nullable|numeric|min:0',
+                'pricing.priority_standard' => 'required|numeric|min:0',
+                'pricing.priority_high' => 'required|numeric|min:0',
+                'pricing.priority_premium' => 'required|numeric|min:0',
                 'pricing.promotion_boost' => 'required|numeric|min:0',
                 'pricing.promotion_spotlight' => 'required|numeric|min:0',
                 'pricing.promotion_super_boost' => 'required|numeric|min:0',
@@ -87,6 +94,9 @@ class PlatformSettingsController extends Controller
             $this->saveSetting('pricing_featured_listing_homepage', $pricing['featured_listing_homepage']);
             $this->saveSetting('pricing_priority_listing', $pricing['priority_listing']);
             $this->saveSetting('pricing_basic_listing', $pricing['basic_listing'] ?? 0);
+            $this->saveSetting('pricing_priority_standard', $pricing['priority_standard']);
+            $this->saveSetting('pricing_priority_high', $pricing['priority_high']);
+            $this->saveSetting('pricing_priority_premium', $pricing['priority_premium']);
             $this->saveSetting('pricing_promotion_boost', $pricing['promotion_boost']);
             $this->saveSetting('pricing_promotion_spotlight', $pricing['promotion_spotlight']);
             $this->saveSetting('pricing_promotion_super_boost', $pricing['promotion_super_boost']);
@@ -106,6 +116,9 @@ class PlatformSettingsController extends Controller
                     'featured_listing_homepage' => (float) $pricing['featured_listing_homepage'],
                     'priority_listing' => (float) $pricing['priority_listing'],
                     'basic_listing' => (float) ($pricing['basic_listing'] ?? 0),
+                    'priority_standard' => (float) $pricing['priority_standard'],
+                    'priority_high' => (float) $pricing['priority_high'],
+                    'priority_premium' => (float) $pricing['priority_premium'],
                     'promotion_boost' => (float) $pricing['promotion_boost'],
                     'promotion_spotlight' => (float) $pricing['promotion_spotlight'],
                     'promotion_super_boost' => (float) $pricing['promotion_super_boost'],

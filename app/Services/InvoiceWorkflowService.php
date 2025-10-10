@@ -20,22 +20,29 @@ class InvoiceWorkflowService
     /**
      * Generate invoice after seller application approval
      */
-    public function generateSellerApprovalInvoice(SellerApplication $application, User $approvedBy): Invoice
+    public function generateSellerApprovalInvoice(SellerApplication $application, User $approvedBy, $planId = null): Invoice
     {
         try {
             DB::beginTransaction();
 
-            // Get default subscription plan for new sellers
-            $defaultPlan = SubscriptionPlan::where('tier', 'basic')
-                ->where('is_active', true)
-                ->first();
+            // Get subscription plan - use provided plan_id or default to basic
+            if ($planId) {
+                $plan = SubscriptionPlan::find($planId);
+                if (!$plan) {
+                    throw new \Exception("Subscription plan with ID {$planId} not found");
+                }
+            } else {
+                $plan = SubscriptionPlan::where('tier', 'basic')
+                    ->where('is_active', true)
+                    ->first();
 
-            if (!$defaultPlan) {
-                throw new \Exception('No default subscription plan found for new sellers');
+                if (!$plan) {
+                    throw new \Exception('No default subscription plan found for new sellers');
+                }
             }
 
             // Calculate amounts
-            $baseAmount = $defaultPlan->price;
+            $baseAmount = $plan->price;
             $taxRate = 7.5; // VAT in Nigeria
             $taxAmount = ($baseAmount * $taxRate) / 100;
             $totalAmount = $baseAmount + $taxAmount;
@@ -45,7 +52,7 @@ class InvoiceWorkflowService
                 'invoice_number' => Invoice::generateInvoiceNumber(),
                 'user_id' => $application->user_id,
                 'seller_application_id' => $application->id,
-                'plan_id' => $defaultPlan->id,
+                'plan_id' => $plan->id,
                 'amount' => $baseAmount,
                 'tax_amount' => $taxAmount,
                 'discount_amount' => 0,
@@ -56,8 +63,8 @@ class InvoiceWorkflowService
                 'due_date' => now()->addDays(14), // 14 days to pay
                 'items' => [
                     [
-                        'name' => $defaultPlan->name . ' Subscription',
-                        'description' => 'Monthly seller subscription - ' . $defaultPlan->description,
+                        'name' => $plan->name . ' Subscription',
+                        'description' => 'Monthly seller subscription - ' . $plan->description,
                         'quantity' => 1,
                         'unit_price' => $baseAmount,
                         'total' => $baseAmount
@@ -265,8 +272,11 @@ class InvoiceWorkflowService
         $user = $invoice->user;
         $plan = $invoice->subscriptionPlan;
 
+        // Get user profile ID (subscriptions are linked to user_profiles, not users)
+        $userProfileId = $user->profile ? $user->profile->id : $user->id;
+
         // Check for existing active subscription
-        $existingSubscription = Subscription::where('user_id', $user->id)
+        $existingSubscription = Subscription::where('user_id', $userProfileId)
             ->where('status', 'active')
             ->first();
 
@@ -277,18 +287,34 @@ class InvoiceWorkflowService
                 'expires_at' => $newExpiryDate,
                 'auto_renew' => true,
             ]);
+
+            Log::info('Subscription extended', [
+                'subscription_id' => $existingSubscription->id,
+                'new_expiry_date' => $newExpiryDate,
+                'user_profile_id' => $userProfileId
+            ]);
+
             return $existingSubscription;
         }
 
         // Create new subscription
-        return Subscription::create([
-            'user_id' => $user->id,
+        $subscription = Subscription::create([
+            'user_id' => $userProfileId,
             'plan_id' => $plan->id,
             'status' => 'active',
             'started_at' => now(),
             'expires_at' => now()->addDays(30), // 30 days from now
             'auto_renew' => true,
         ]);
+
+        Log::info('New subscription created', [
+            'subscription_id' => $subscription->id,
+            'user_profile_id' => $userProfileId,
+            'plan_id' => $plan->id,
+            'plan_name' => $plan->name
+        ]);
+
+        return $subscription;
     }
 
     /**

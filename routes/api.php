@@ -404,6 +404,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
         // Analytics
         Route::get('/analytics/dashboard', [AdminController::class, 'dashboardAnalytics']);
+        Route::get('/analytics/extended', [AdminController::class, 'dashboardAnalyticsExtended']);
         Route::get('/analytics/listings', [AdminController::class, 'listingAnalytics']);
         Route::get('/analytics/users', [AdminController::class, 'userAnalytics']);
         Route::get('/dashboard/analytics', [AdminController::class, 'dashboardAnalytics']);

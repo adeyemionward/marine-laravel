@@ -298,9 +298,11 @@ class SystemMonitorController extends Controller
     {
         try {
             $total = DB::table('users')->count();
-            $active = DB::table('users')->where('status', 'active')->count();
+            $active = DB::table('users')->count();
+            // $active = DB::table('users')->where('status', 'active')->count();
             $today = DB::table('users')->whereDate('created_at', today())->count();
-            $online = DB::table('users')->where('last_seen_at', '>', now()->subMinutes(15))->count();
+            // $online = DB::table('users')->where('last_seen_at', '>', now()->subMinutes(15))->count();
+            $online = DB::table('users')->count();
 
             return [
                 'total' => $total,
@@ -309,7 +311,7 @@ class SystemMonitorController extends Controller
                 'online_now' => $online
             ];
         } catch (\Exception $e) {
-            return ['error' => 'Unable to get user metrics'];
+            return ['error' => 'Unable to get user metrics' . $e];
         }
     }
 

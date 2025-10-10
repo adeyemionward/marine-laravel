@@ -20,7 +20,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-
 class AdminController extends Controller
 {
     public function listings(): JsonResponse
@@ -811,7 +810,7 @@ class AdminController extends Controller
         try {
             $validated = $request->validate([
                 'application_id' => 'required|exists:seller_applications,id',
-                'plan_id' => 'nullable|string',
+                'plan_id' => 'nullable|integer|exists:subscription_plans,id',
                 'admin_notes' => 'nullable|string',
                 'verification_level' => 'nullable|string|in:basic,premium,enterprise',
                 'welcome_message' => 'nullable|boolean',
@@ -836,16 +835,17 @@ class AdminController extends Controller
             $autoGenerateInvoice = $validated['auto_generate_invoice'] ?? true; // Default to true
             $skipInvoice = $validated['skip_invoice'] ?? false;
             $grantImmediateAccess = $validated['grant_immediate_access'] ?? false;
+            $planId = $validated['plan_id'] ?? null;
 
             if ($grantImmediateAccess || $skipInvoice) {
                 // Grant immediate access without invoice
-                $this->grantImmediateSellerAccess($application);
+                $this->grantImmediateSellerAccess($application, $planId);
                 $response['message'] = 'Seller application approved with immediate access granted';
                 $response['data']['immediate_access'] = true;
             } elseif ($autoGenerateInvoice) {
                 // Generate invoice automatically (default behavior)
                 $invoiceWorkflowService = app(\App\Services\InvoiceWorkflowService::class);
-                $invoice = $invoiceWorkflowService->generateSellerApprovalInvoice($application, auth()->user());
+                $invoice = $invoiceWorkflowService->generateSellerApprovalInvoice($application, auth()->user(), $planId);
 
                 $response['message'] = 'Seller application approved and invoice generated successfully';
                 $response['data']['invoice'] = [
@@ -876,30 +876,49 @@ class AdminController extends Controller
     /**
      * Grant immediate seller access without requiring payment
      */
-    private function grantImmediateSellerAccess(SellerApplication $application): void
+    private function grantImmediateSellerAccess(SellerApplication $application, $planId = null): void
     {
         $user = $application->user;
 
-        // Create active subscription without payment
-        $defaultPlan = \App\Models\SubscriptionPlan::where('tier', 'basic')
-            ->where('is_active', true)
-            ->first();
-
-        if ($defaultPlan) {
-            \App\Models\Subscription::create([
-                'user_id' => $user->id,
-                'plan_id' => $defaultPlan->id,
-                'status' => 'active',
-                'started_at' => now(),
-                'expires_at' => now()->addDays(30), // 30 days trial or full access
-                'auto_renew' => false, // Don't auto-renew for manually granted access
-            ]);
+        // Get the plan - use provided plan_id or default to basic
+        if ($planId) {
+            $plan = \App\Models\SubscriptionPlan::find($planId);
+        } else {
+            $plan = \App\Models\SubscriptionPlan::where('tier', 'basic')
+                ->where('is_active', true)
+                ->first();
         }
+
+        if (!$plan) {
+            \Log::warning('No subscription plan found for immediate access', [
+                'plan_id' => $planId,
+                'application_id' => $application->id
+            ]);
+            return;
+        }
+
+        // Create active subscription without payment
+        $userProfileId = $user->profile ? $user->profile->id : $user->id;
+
+        \App\Models\Subscription::create([
+            'user_id' => $userProfileId,
+            'plan_id' => $plan->id,
+            'status' => 'active',
+            'started_at' => now(),
+            'expires_at' => now()->addDays(30), // 30 days trial or full access
+            'auto_renew' => false, // Don't auto-renew for manually granted access
+        ]);
+
+        \Log::info('Subscription created for immediate access', [
+            'user_id' => $userProfileId,
+            'plan_id' => $plan->id,
+            'plan_name' => $plan->name
+        ]);
 
         // Activate seller profile
         if ($user->sellerProfile) {
             $user->sellerProfile->update([
-                'verification_status' => 'active',
+                'verification_status' => 'approved',
                 'verified_at' => now(),
             ]);
         }
@@ -1991,9 +2010,59 @@ class AdminController extends Controller
         try {
             $timeRange = $request->get('time_range', '30d');
             $days = (int) str_replace('d', '', $timeRange);
+            $startDate = Carbon::now()->subDays($days);
 
-            // Get comprehensive analytics data
-            $metrics = $this->getSystemMetrics($request)->getData()->data;
+            // Generate time-series data for user growth
+            $userGrowth = [];
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $date = Carbon::now()->subDays($i);
+                $count = User::whereDate('created_at', '<=', $date)->count();
+                $userGrowth[] = [
+                    'name' => $date->format('M d'),
+                    'value' => $count,
+                    'date' => $date->toISOString()
+                ];
+            }
+
+            // Generate time-series data for listings
+            $listingMetrics = [];
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $date = Carbon::now()->subDays($i);
+                $count = EquipmentListing::whereDate('created_at', $date)->count();
+                $listingMetrics[] = [
+                    'name' => $date->format('M d'),
+                    'value' => $count,
+                    'date' => $date->toISOString()
+                ];
+            }
+
+            // Generate time-series data for revenue (from invoices)
+            $revenueData = [];
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $date = Carbon::now()->subDays($i);
+                $revenue = \DB::table('invoices')
+                    ->whereDate('paid_at', $date)
+                    ->where('status', 'paid')
+                    ->sum('total_amount');
+                $revenueData[] = [
+                    'name' => $date->format('M d'),
+                    'value' => (int) $revenue,
+                    'date' => $date->toISOString()
+                ];
+            }
+
+            // Generate time-series data for engagement (views + messages)
+            $engagementData = [];
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $date = Carbon::now()->subDays($i);
+                $views = EquipmentListing::whereDate('updated_at', $date)->sum('view_count');
+                $messages = \DB::table('messages')->whereDate('created_at', $date)->count();
+                $engagementData[] = [
+                    'name' => $date->format('M d'),
+                    'value' => (int) ($views + $messages * 10), // Weight messages more
+                    'date' => $date->toISOString()
+                ];
+            }
 
             // Category analytics
             $categoryStats = EquipmentListing::join('equipment_categories', 'equipment_listings.category_id', '=', 'equipment_categories.id')
@@ -2001,16 +2070,35 @@ class AdminController extends Controller
                 ->groupBy('equipment_categories.id', 'equipment_categories.name')
                 ->orderBy('count', 'desc')
                 ->limit(10)
-                ->get();
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'name' => $item->name,
+                        'value' => $item->count
+                    ];
+                });
 
             // Top sellers
-            $topSellers = EquipmentListing::join('user_profiles', 'equipment_listings.user_id', '=', 'user_profiles.user_id')
+            $topSellers = EquipmentListing::join('user_profiles', 'equipment_listings.seller_id', '=', 'user_profiles.user_id')
                 ->select('user_profiles.full_name', \DB::raw('count(*) as listing_count'))
                 ->where('equipment_listings.status', 'active')
                 ->groupBy('user_profiles.user_id', 'user_profiles.full_name')
                 ->orderBy('listing_count', 'desc')
                 ->limit(10)
-                ->get();
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'name' => $item->full_name ?: 'Unknown Seller',
+                        'value' => $item->listing_count
+                    ];
+                });
+
+            // Calculate summary metrics
+            $totalUsers = User::count();
+            $totalListings = EquipmentListing::count();
+            $activeListings = EquipmentListing::where('status', 'active')->count();
+            $totalRevenue = \DB::table('invoices')->where('status', 'paid')->sum('total_amount');
+            $totalViews = EquipmentListing::sum('view_count');
 
             // Recent activity
             $recentUsers = User::with('profile')
@@ -2018,7 +2106,7 @@ class AdminController extends Controller
                 ->limit(5)
                 ->get();
 
-            $recentListings = EquipmentListing::with(['category', 'seller'])
+            $recentListings = EquipmentListing::with(['category'])
                 ->latest()
                 ->limit(5)
                 ->get();
@@ -2026,19 +2114,23 @@ class AdminController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'metrics' => $metrics,
-                    'category_stats' => $categoryStats,
-                    'top_sellers' => $topSellers,
+                    'userGrowth' => $userGrowth,
+                    'revenueData' => $revenueData,
+                    'listingMetrics' => $listingMetrics,
+                    'engagementData' => $engagementData,
+                    'topCategories' => $categoryStats,
+                    'topSellers' => $topSellers,
+                    'summary' => [
+                        'total_users' => $totalUsers,
+                        'total_listings' => $totalListings,
+                        'active_listings' => $activeListings,
+                        'total_revenue' => (int) $totalRevenue,
+                        'total_views' => (int) $totalViews,
+                    ],
                     'recent_activity' => [
                         'users' => $recentUsers,
                         'listings' => $recentListings,
                     ],
-                    'performance_indicators' => [
-                        'conversion_rate' => rand(8, 15) . '%',
-                        'avg_session_duration' => rand(4, 8) . ' minutes',
-                        'bounce_rate' => rand(20, 40) . '%',
-                        'page_views' => number_format(rand(50000, 200000)),
-                    ]
                 ],
             ]);
         } catch (\Exception $e) {
@@ -2714,7 +2806,8 @@ class AdminController extends Controller
     public function getInvoices(Request $request): JsonResponse
     {
         try {
-            $query = Invoice::with(['user', 'sellerApplication', 'subscriptionPlan']);
+            $query = Invoice::with(['user', 'user.profile', 'sellerApplication', 'subscriptionPlan'])
+                ->select('invoices.*'); // Ensure all invoice fields including payment_proof_url are selected
 
             // Apply filters
             if ($request->has('status') && $request->status !== 'all') {

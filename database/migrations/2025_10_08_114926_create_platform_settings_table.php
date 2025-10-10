@@ -56,6 +56,31 @@ return new class extends Migration
                 'created_at' => now(),
                 'updated_at' => now()
             ],
+            // Priority Listing Levels
+            [
+                'key' => 'pricing_priority_standard',
+                'value' => '5000',
+                'type' => 'number',
+                'description' => 'Price for standard priority listing',
+                'created_at' => now(),
+                'updated_at' => now()
+            ],
+            [
+                'key' => 'pricing_priority_high',
+                'value' => '10000',
+                'type' => 'number',
+                'description' => 'Price for high priority listing',
+                'created_at' => now(),
+                'updated_at' => now()
+            ],
+            [
+                'key' => 'pricing_priority_premium',
+                'value' => '20000',
+                'type' => 'number',
+                'description' => 'Price for premium priority listing',
+                'created_at' => now(),
+                'updated_at' => now()
+            ],
             [
                 'key' => 'pricing_tax_rate',
                 'value' => '7.5',

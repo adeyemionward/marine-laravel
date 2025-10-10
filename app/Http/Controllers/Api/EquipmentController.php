@@ -308,8 +308,18 @@ class EquipmentController extends Controller
 
             $user = $request->user();
 
+            // Get user profile ID (required for seller_id foreign key)
+            $userProfile = $user->profile;
+            if (!$userProfile) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User profile not found. Please complete your profile first.',
+                ], 400);
+            }
+
             \Log::info('User subscription check', [
                 'user_id' => $user->id,
+                'profile_id' => $userProfile->id,
                 'has_active_subscription' => method_exists($user, 'activeSubscription')
             ]);
 
@@ -461,47 +471,80 @@ if (!$listing) {
             $request->validate([
                 'title' => 'sometimes|required|string|max:255',
                 'description' => 'sometimes|required|string|max:2000',
-                'price' => 'sometimes|required|numeric|min:0',
+                'price' => 'nullable|numeric|min:0',
                 'category_id' => 'sometimes|required|exists:equipment_categories,id',
-                'condition' => 'sometimes|required|in:new,like_new,good,fair,poor',
+                'condition' => 'sometimes|required|in:new,like-new,good,fair,poor',
                 'brand' => 'nullable|string|max:100',
                 'model' => 'nullable|string|max:100',
                 'year' => 'nullable|integer|min:1900|max:' . (date('Y') + 1),
                 'location_state' => 'sometimes|required|string|max:100',
                 'location_city' => 'nullable|string|max:100',
+                'location_address' => 'nullable|string',
                 'images' => 'nullable|array|max:10',
-                'images.*' => 'file|mimes:jpeg,jpg,png|max:5120',
+                // Images can be either file uploads or already-uploaded image data
+                // We'll handle validation separately below
                 'specifications' => 'nullable|array',
+                'features' => 'nullable|array',
                 'contact_phone' => 'nullable|string|max:20',
                 'contact_email' => 'nullable|email',
-                'negotiable' => 'boolean',
+                'contact_whatsapp' => 'nullable|string|max:20',
+                'contact_methods' => 'nullable|array',
+                'availability_hours' => 'nullable|array',
+                'is_price_negotiable' => 'nullable|boolean',
+                'is_poa' => 'nullable|boolean',
+                'delivery_available' => 'nullable|boolean',
+                'delivery_radius' => 'nullable|integer',
+                'delivery_fee' => 'nullable|numeric',
+                'allows_inspection' => 'nullable|boolean',
+                'hide_address' => 'nullable|boolean',
             ]);
 
             $user = $request->user();
-            $listing = EquipmentListing::where('seller_id', $user->id)
+            $listing = EquipmentListing::where('seller_id', $user->profile->id)
                 ->findOrFail($id);
 
-            // Handle new image uploads if provided
+            // Prepare update data
+            $updateData = $request->only([
+                'title', 'description', 'price', 'category_id', 'condition',
+                'brand', 'model', 'year', 'location_state', 'location_city', 'location_address',
+                'specifications', 'features', 'contact_phone', 'contact_email', 'contact_whatsapp',
+                'contact_methods', 'availability_hours', 'is_price_negotiable', 'is_poa',
+                'delivery_available', 'delivery_radius', 'delivery_fee', 'allows_inspection',
+                'hide_address', 'power_source', 'min_price', 'payment_methods', 'pricing_notes',
+                'currency', 'priority_tier'
+            ]);
+
+            // Handle images - can be array of image data (already uploaded) or file uploads
+            if ($request->has('images')) {
+                $imagesData = $request->input('images');
+
+                // Check if this is image data (not file uploads)
+                if (is_array($imagesData) && !empty($imagesData)) {
+                    $firstImage = $imagesData[0];
+
+                    // If it's already uploaded image data (has 'url' field), use it directly
+                    if (is_array($firstImage) && isset($firstImage['url'])) {
+                        $updateData['images'] = $imagesData;
+                    }
+                }
+            }
+
+            // Handle new file uploads if provided
             if ($request->hasFile('images')) {
                 $subscription = $user->activeSubscription();
                 $maxImages = $subscription->plan->max_images_per_listing ?? 5;
                 $images = array_slice($request->file('images'), 0, $maxImages);
-                
+
                 $imagePaths = [];
                 foreach ($images as $image) {
                     $path = $image->store('listings', 'public');
                     $imagePaths[] = $path;
                 }
-                
-                // Delete old images (optional - implement cleanup)
-                $listing->images = $imagePaths;
+
+                $updateData['images'] = $imagePaths;
             }
 
-            $listing->update($request->only([
-                'title', 'description', 'price', 'category_id', 'condition',
-                'brand', 'model', 'year', 'location_state', 'location_city',
-                'specifications', 'contact_phone', 'contact_email', 'negotiable'
-            ]));
+            $listing->update($updateData);
 
             \Log::info('Equipment update successful', ['id' => $id]);
 
@@ -532,7 +575,7 @@ if (!$listing) {
     {
         try {
             $user = $request->user();
-            $listing = EquipmentListing::where('seller_id', $user->id)
+            $listing = EquipmentListing::where('seller_id', $user->profile->id)
                 ->findOrFail($id);
 
             // Soft delete the listing instead of hard delete
@@ -761,7 +804,7 @@ if (!$listing) {
             $user = $request->user();
             
             // Find the listing and verify ownership
-            $listing = EquipmentListing::where('seller_id', $user->id)
+            $listing = EquipmentListing::where('seller_id', $user->profile->id)
                 ->findOrFail($id);
 
             // Validate images
