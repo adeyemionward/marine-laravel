@@ -20,13 +20,13 @@ class ConversationController extends Controller
     public function index(): JsonResponse
     {
         try {
-            $userId = Auth::user()->profile->id;
+            $userId = Auth::user()->id;
 
             $conversations = Conversation::where(function ($query) use ($userId) {
                 $query->where('buyer_id', $userId)
                       ->orWhere('seller_id', $userId);
             })
-            ->with(['buyer', 'seller', 'listing', 'lastMessage'])
+            ->with(['buyer.profile', 'seller.profile', 'listing', 'lastMessage'])
             ->orderBy('updated_at', 'desc')
             ->get()
             ->map(function ($conversation) use ($userId) {
@@ -39,6 +39,14 @@ class ConversationController extends Controller
                     ->whereNull('read_at')
                     ->count();
 
+                // Handle images - check if it's already an array or a JSON string
+                $images = $conversation->listing->images;
+                if (is_string($images)) {
+                    $images = json_decode($images, true) ?? [];
+                } elseif (!is_array($images)) {
+                    $images = [];
+                }
+
                 return [
                     'id' => $conversation->id,
                     'listing' => [
@@ -46,16 +54,16 @@ class ConversationController extends Controller
                         'title' => $conversation->listing->title,
                         'price' => $conversation->listing->price,
                         'currency' => $conversation->listing->currency,
-                        'images' => json_decode($conversation->listing->images ?? '[]', true),
+                        'images' => $images,
                     ],
                     'other_user' => [
                         'id' => $otherParty->id,
-                        'name' => $otherParty->full_name,
-                        'company' => $otherParty->company_name,
-                        'role' => $otherParty->role,
-                        'avatar' => $otherParty->profile_picture,
+                        'name' => $otherParty->name,
+                        'company' => $otherParty->profile->company_name ?? null,
+                        'role' => $otherParty->role->name ?? 'user',
+                        'avatar' => $otherParty->profile->avatar_url ?? null,
                         'isOnline' => false, // You can implement real online status later
-                        'isVerified' => $otherParty->is_verified ?? false,
+                        'isVerified' => $otherParty->profile->is_verified ?? false,
                     ],
                     'lastMessage' => $conversation->lastMessage ? [
                         'content' => $conversation->lastMessage->content,
@@ -94,7 +102,7 @@ class ConversationController extends Controller
                 'initial_message' => 'nullable|string|max:1000',
             ]);
 
-            $userId = Auth::user()->profile->id;
+            $userId = Auth::user()->id;
             $listing = EquipmentListing::findOrFail($validated['listing_id']);
 
             // Prevent users from messaging themselves
@@ -149,20 +157,20 @@ class ConversationController extends Controller
                     ],
                     'buyer' => [
                         'id' => $conversation->buyer->id,
-                        'name' => $conversation->buyer->full_name,
-                        'company' => $conversation->buyer->company_name,
+                        'name' => $conversation->buyer->name,
+                        'company' => $conversation->buyer->profile->company_name ?? null,
                     ],
                     'seller' => [
                         'id' => $conversation->seller->id,
-                        'name' => $conversation->seller->full_name,
-                        'company' => $conversation->seller->company_name,
+                        'name' => $conversation->seller->name,
+                        'company' => $conversation->seller->profile->company_name ?? null,
                     ],
                     'messages' => $conversation->messages->map(function ($message) {
                         return [
                             'id' => $message->id,
                             'content' => $message->content,
                             'sender_id' => $message->sender_id,
-                            'sender_name' => $message->sender->full_name,
+                            'sender_name' => $message->sender->name ?? 'Unknown',
                             'read_at' => $message->read_at,
                             'created_at' => $message->created_at,
                         ];
@@ -186,14 +194,14 @@ class ConversationController extends Controller
     public function show($id): JsonResponse
     {
         try {
-            $userId = Auth::user()->profile->id;
+            $userId = Auth::user()->id;
 
             $conversation = Conversation::where('id', $id)
                 ->where(function ($query) use ($userId) {
                     $query->where('buyer_id', $userId)
                           ->orWhere('seller_id', $userId);
                 })
-                ->with(['buyer', 'seller', 'listing', 'messages.sender'])
+                ->with(['buyer.profile', 'seller.profile', 'listing', 'messages.sender'])
                 ->first();
 
             if (!$conversation) {
@@ -213,6 +221,14 @@ class ConversationController extends Controller
                 ? $conversation->seller
                 : $conversation->buyer;
 
+            // Handle images - check if it's already an array or a JSON string
+            $images = $conversation->listing->images;
+            if (is_string($images)) {
+                $images = json_decode($images, true) ?? [];
+            } elseif (!is_array($images)) {
+                $images = [];
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -222,15 +238,15 @@ class ConversationController extends Controller
                         'title' => $conversation->listing->title,
                         'price' => $conversation->listing->price,
                         'currency' => $conversation->listing->currency,
-                        'images' => json_decode($conversation->listing->images ?? '[]', true),
+                        'images' => $images,
                     ],
                     'other_user' => [
                         'id' => $otherParty->id,
-                        'name' => $otherParty->full_name,
-                        'company' => $otherParty->company_name,
-                        'avatar' => $otherParty->profile_picture,
+                        'name' => $otherParty->name,
+                        'company' => $otherParty->profile->company_name ?? null,
+                        'avatar' => $otherParty->profile->avatar_url ?? null,
                         'isOnline' => false,
-                        'isVerified' => $otherParty->is_verified ?? false,
+                        'isVerified' => $otherParty->profile->is_verified ?? false,
                     ],
                     'messages' => $conversation->messages->sortBy('created_at')->map(function ($message) {
                         return [
@@ -238,7 +254,7 @@ class ConversationController extends Controller
                             'content' => $message->content,
                             'type' => $message->type,
                             'sender_id' => $message->sender_id,
-                            'sender_name' => $message->sender->full_name,
+                            'sender_name' => $message->sender->name ?? 'Unknown',
                             'offer_price' => $message->offer_price,
                             'offer_currency' => $message->offer_currency,
                             'read_at' => $message->read_at,
@@ -272,7 +288,7 @@ class ConversationController extends Controller
                 'offer_currency' => 'nullable|string|size:3',
             ]);
 
-            $userId = Auth::user()->profile->id;
+            $userId = Auth::user()->id;
 
             $conversation = Conversation::where('id', $id)
                 ->where(function ($query) use ($userId) {
@@ -320,7 +336,7 @@ class ConversationController extends Controller
                     'content' => $message->content,
                     'type' => $message->type,
                     'sender_id' => $message->sender_id,
-                    'sender_name' => $message->sender->full_name,
+                    'sender_name' => $message->sender->name ?? 'Unknown',
                     'offer_price' => $message->offer_price,
                     'offer_currency' => $message->offer_currency,
                     'read_at' => $message->read_at,

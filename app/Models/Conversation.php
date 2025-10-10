@@ -38,12 +38,12 @@ class Conversation extends Model
 
     public function buyer(): BelongsTo
     {
-        return $this->belongsTo(UserProfile::class, 'buyer_id');
+        return $this->belongsTo(User::class, 'buyer_id');
     }
 
     public function seller(): BelongsTo
     {
-        return $this->belongsTo(UserProfile::class, 'seller_id');
+        return $this->belongsTo(User::class, 'seller_id');
     }
 
     public function messages(): HasMany
@@ -64,7 +64,7 @@ class Conversation extends Model
         });
     }
 
-    public function getOtherParticipant($currentUserId): UserProfile
+    public function getOtherParticipant($currentUserId): User
     {
         return $this->buyer_id === $currentUserId ? $this->seller : $this->buyer;
     }

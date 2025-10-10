@@ -39,7 +39,7 @@ class Message extends Model
 
     public function sender(): BelongsTo
     {
-        return $this->belongsTo(UserProfile::class, 'sender_id');
+        return $this->belongsTo(User::class, 'sender_id');
     }
 
     public function scopeUnread($query)
