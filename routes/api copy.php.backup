@@ -41,8 +41,7 @@ use App\Http\Controllers\Api\SystemMonitorController;
 use App\Http\Controllers\Api\Admin\ApiKeyController;
 use App\Http\Controllers\Api\PlatformSettingsController;
 use App\Models\EmailConfig;
-use Illuminate\Support\Facades\Broadcast;
-use Illuminate\Support\Facades\Log;
+
 // Simple test route for debugging
 Route::get('/test', function () {
     return response()->json(['message' => 'API routes working', 'timestamp' => now()]);
@@ -689,8 +688,3 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 Route::prefix('newsletters')->group(function () {
     Route::post('/{id}/resend', [NewsLetterController::class, 'resend'])->name('newsletters.resend');
 });
-
-
-// ✅ Register Broadcast routes (must be last)
-Broadcast::routes(['middleware' => ['auth:sanctum']]);
-
