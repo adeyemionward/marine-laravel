@@ -17,7 +17,7 @@ class FileStorageService
     public function uploadImage($file, $folder = 'general', $options = [])
     {
         try {
-            \Log::info('FileStorageService::uploadImage called', [
+            Log::info('FileStorageService::uploadImage called', [
                 'folder' => $folder,
                 'file_info' => [
                     'name' => method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'unknown',
@@ -77,10 +77,10 @@ class FileStorageService
                     }
                 }
             } catch (Exception $e) {
-                \Log::warning('Failed to get image dimensions', ['error' => $e->getMessage()]);
+                Log::warning('Failed to get image dimensions', ['error' => $e->getMessage()]);
             }
 
-            \Log::info('FileStorageService: upload successful', [
+            Log::info('FileStorageService: upload successful', [
                 'path' => $storagePath,
                 'url' => $url
             ]);
@@ -99,7 +99,7 @@ class FileStorageService
                 ]
             ];
         } catch (Exception $e) {
-            \Log::error('FileStorageService: upload failed', [
+            Log::error('FileStorageService: upload failed', [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine()
@@ -118,7 +118,7 @@ class FileStorageService
     public function uploadFile($file, $folder = 'general', $options = [])
     {
         try {
-            \Log::info('FileStorageService::uploadFile called', [
+            Log::info('FileStorageService::uploadFile called', [
                 'folder' => $folder,
                 'file_info' => [
                     'name' => method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'unknown',
@@ -180,11 +180,11 @@ class FileStorageService
                         }
                     }
                 } catch (Exception $e) {
-                    \Log::warning('Failed to get image dimensions', ['error' => $e->getMessage()]);
+                    Log::warning('Failed to get image dimensions', ['error' => $e->getMessage()]);
                 }
             }
 
-            \Log::info('FileStorageService: file upload successful', [
+            Log::info('FileStorageService: file upload successful', [
                 'path' => $storagePath,
                 'url' => $url
             ]);
@@ -203,7 +203,7 @@ class FileStorageService
                 ]
             ];
         } catch (Exception $e) {
-            \Log::error('FileStorageService: file upload failed', [
+            Log::error('FileStorageService: file upload failed', [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine()

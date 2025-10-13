@@ -51,7 +51,7 @@ class CustomerSupplierController extends Controller
                     $q->from('invoices')
                       ->whereColumn('invoices.user_id', 'users.id')
                       ->where('status', 'paid')
-                      ->selectRaw('SUM(total_amount)');
+                      ->selectRaw('COALESCE(SUM(total_amount), 0)');
                 }, 'total_spent')
                 ->selectSub(function($q) {
                     $q->from('invoices')
@@ -59,8 +59,46 @@ class CustomerSupplierController extends Controller
                       ->where('status', 'paid')
                       ->selectRaw('COUNT(*)');
                 }, 'purchase_count')
+                ->selectSub(function($q) {
+                    $q->from('invoices')
+                      ->whereColumn('invoices.user_id', 'users.id')
+                      ->whereIn('status', ['pending', 'overdue'])
+                      ->selectRaw('COALESCE(SUM(total_amount), 0)');
+                }, 'current_balance')
                 ->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 20));
+
+            // Add credit_limit and other fields from user_profiles
+            $customers->getCollection()->transform(function ($customer) {
+                if ($customer->profile) {
+                    $customer->credit_limit = $customer->profile->credit_limit ?? 0;
+                    $customer->customer_type = $customer->profile->customer_type ?? 'individual';
+                    $customer->customer_code = $customer->profile->customer_code ?? 'C-' . str_pad($customer->id, 6, '0', STR_PAD_LEFT);
+                    $customer->tax_id = $customer->profile->tax_id;
+                    $customer->business_registration = $customer->profile->business_registration;
+                    $customer->city = $customer->profile->city;
+                    $customer->state = $customer->profile->state;
+                    $customer->postal_code = $customer->profile->postal_code;
+                    $customer->country = $customer->profile->country ?? 'Nigeria';
+                    $customer->status = $customer->profile->status ?? 'active';
+                } else {
+                    $customer->credit_limit = 0;
+                    $customer->customer_type = 'individual';
+                    $customer->customer_code = 'C-' . str_pad($customer->id, 6, '0', STR_PAD_LEFT);
+                    $customer->tax_id = null;
+                    $customer->business_registration = null;
+                    $customer->city = null;
+                    $customer->state = null;
+                    $customer->postal_code = null;
+                    $customer->country = 'Nigeria';
+                    $customer->status = 'active';
+                }
+
+                // Ensure current_balance is set
+                $customer->current_balance = $customer->current_balance ?? 0;
+
+                return $customer;
+            });
 
             return response()->json([
                 'success' => true,
@@ -135,6 +173,33 @@ class CustomerSupplierController extends Controller
                 }, 'total_revenue')
                 ->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 20));
+
+            // Add supplier-specific fields from user_profiles
+            $suppliers->getCollection()->transform(function ($supplier) {
+                if ($supplier->profile) {
+                    $supplier->supplier_type = $supplier->profile->supplier_type ?? 'equipment_supplier';
+                    $supplier->supplier_code = $supplier->profile->supplier_code ?? 'S-' . str_pad($supplier->id, 6, '0', STR_PAD_LEFT);
+                    $supplier->payment_terms = $supplier->profile->payment_terms ?? 30;
+                    $supplier->is_preferred = $supplier->profile->is_preferred ?? false;
+                    $supplier->city = $supplier->profile->city;
+                    $supplier->state = $supplier->profile->state;
+                    $supplier->postal_code = $supplier->profile->postal_code;
+                    $supplier->country = $supplier->profile->country ?? 'Nigeria';
+                    $supplier->status = $supplier->profile->status ?? 'active';
+                } else {
+                    $supplier->supplier_type = 'equipment_supplier';
+                    $supplier->supplier_code = 'S-' . str_pad($supplier->id, 6, '0', STR_PAD_LEFT);
+                    $supplier->payment_terms = 30;
+                    $supplier->is_preferred = false;
+                    $supplier->city = null;
+                    $supplier->state = null;
+                    $supplier->postal_code = null;
+                    $supplier->country = 'Nigeria';
+                    $supplier->status = 'active';
+                }
+
+                return $supplier;
+            });
 
             return response()->json([
                 'success' => true,
