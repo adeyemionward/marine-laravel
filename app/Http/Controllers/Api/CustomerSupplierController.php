@@ -8,7 +8,10 @@ use Illuminate\Http\JsonResponse;
 use App\Models\User;
 use App\Models\Invoice;
 use App\Models\EquipmentListing;
+use App\Models\CreditLimitRequest;
+use App\Models\CreditLimitHistory;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
 class CustomerSupplierController extends Controller
@@ -320,34 +323,59 @@ class CustomerSupplierController extends Controller
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email,' . $id,
                 'phone' => 'nullable|string|max:20',
-                'company' => 'nullable|string|max:255',
                 'address' => 'nullable|string|max:500',
-                'notes' => 'nullable|string|max:1000'
+                'city' => 'nullable|string|max:100',
+                'state' => 'nullable|string|max:100',
+                'postal_code' => 'nullable|string|max:20',
+                'country' => 'nullable|string|max:100',
+                'customer_type' => 'nullable|in:individual,business,government,nonprofit',
+                'credit_limit' => 'nullable|numeric|min:0',
+                'tax_id' => 'nullable|string|max:100',
+                'business_registration' => 'nullable|string|max:100',
+                'notes' => 'nullable|string|max:1000',
+                'status' => 'nullable|in:active,inactive,pending,suspended'
             ]);
 
             if ($id) {
                 $user = User::findOrFail($id);
-                $user->update($validated);
+                $user->update(['name' => $validated['name'], 'email' => $validated['email']]);
                 $message = 'Customer updated successfully';
             } else {
-                $user = User::create(array_merge($validated, [
-                    'password' => bcrypt('temp_password_' . uniqid()),
-                    'status' => 'active'
-                ]));
+                $user = User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'password' => bcrypt('temp_password_' . uniqid())
+                ]);
                 $message = 'Customer created successfully';
             }
 
-            // Update or create user profile with additional info
-            if ($request->has(['phone', 'company', 'address'])) {
-                $user->profile()->updateOrCreate(
-                    ['user_id' => $user->id],
-                    [
-                        'phone_number' => $request->phone,
-                        'company_name' => $request->company,
-                        'address' => $request->address
-                    ]
-                );
+            // Update or create user profile with customer-specific info
+            $profileData = [
+                'phone_number' => $request->phone,
+                'address' => $request->address,
+                'city' => $request->city,
+                'state' => $request->state,
+                'postal_code' => $request->postal_code,
+                'country' => $request->country ?? 'Nigeria',
+                'customer_type' => $request->customer_type ?? 'individual',
+                'credit_limit' => $request->credit_limit ?? 0,
+                'tax_id' => $request->tax_id,
+                'business_registration' => $request->business_registration,
+                'notes' => $request->notes,
+                'status' => $request->status ?? 'active'
+            ];
+
+            // Generate customer code if creating new customer
+            if (!$id) {
+                $profileData['customer_code'] = 'C-' . str_pad($user->id, 6, '0', STR_PAD_LEFT);
             }
+
+            $user->profile()->updateOrCreate(
+                ['user_id' => $user->id],
+                array_filter($profileData, function($value) {
+                    return $value !== null;
+                })
+            );
 
             return response()->json([
                 'success' => true,
@@ -462,23 +490,30 @@ class CustomerSupplierController extends Controller
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email,' . $id,
                 'phone' => 'nullable|string|max:20',
-                'company' => 'nullable|string|max:255',
                 'address' => 'nullable|string|max:500',
-                'supplier_type' => 'nullable|string|max:100',
+                'city' => 'nullable|string|max:100',
+                'state' => 'nullable|string|max:100',
+                'postal_code' => 'nullable|string|max:20',
+                'country' => 'nullable|string|max:100',
+                'supplier_type' => 'nullable|in:equipment_supplier,parts_supplier,service_provider,maintenance_provider,consultant,other',
                 'payment_terms' => 'nullable|integer|min:0',
                 'is_preferred' => 'nullable|boolean',
-                'notes' => 'nullable|string|max:1000'
+                'tax_id' => 'nullable|string|max:100',
+                'business_registration' => 'nullable|string|max:100',
+                'notes' => 'nullable|string|max:1000',
+                'status' => 'nullable|in:active,inactive,pending,suspended'
             ]);
 
             if ($id) {
                 $user = User::findOrFail($id);
-                $user->update($validated);
+                $user->update(['name' => $validated['name'], 'email' => $validated['email']]);
                 $message = 'Supplier updated successfully';
             } else {
-                $user = User::create(array_merge($validated, [
-                    'password' => bcrypt('temp_password_' . uniqid()),
-                    'status' => 'active'
-                ]));
+                $user = User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'password' => bcrypt('temp_password_' . uniqid())
+                ]);
 
                 // Assign seller role
                 $sellerRole = \App\Models\Role::where('name', 'seller')->first();
@@ -490,24 +525,39 @@ class CustomerSupplierController extends Controller
                 $message = 'Supplier created successfully';
             }
 
-            // Update or create seller profile
-            if ($request->has(['company', 'supplier_type', 'payment_terms', 'is_preferred'])) {
-                $user->sellerProfile()->updateOrCreate(
-                    ['seller_id' => $user->id],
-                    [
-                        'business_name' => $request->company,
-                        'supplier_type' => $request->supplier_type,
-                        'payment_terms' => $request->payment_terms,
-                        'is_preferred' => $request->boolean('is_preferred'),
-                        'notes' => $request->notes
-                    ]
-                );
+            // Update or create user profile with supplier-specific info
+            $profileData = [
+                'phone_number' => $request->phone,
+                'address' => $request->address,
+                'city' => $request->city,
+                'state' => $request->state,
+                'postal_code' => $request->postal_code,
+                'country' => $request->country ?? 'Nigeria',
+                'supplier_type' => $request->supplier_type ?? 'equipment_supplier',
+                'payment_terms' => $request->payment_terms ?? 30,
+                'is_preferred' => $request->boolean('is_preferred', false),
+                'tax_id' => $request->tax_id,
+                'business_registration' => $request->business_registration,
+                'notes' => $request->notes,
+                'status' => $request->status ?? 'active'
+            ];
+
+            // Generate supplier code if creating new supplier
+            if (!$id) {
+                $profileData['supplier_code'] = 'S-' . str_pad($user->id, 6, '0', STR_PAD_LEFT);
             }
+
+            $user->profile()->updateOrCreate(
+                ['user_id' => $user->id],
+                array_filter($profileData, function($value) {
+                    return $value !== null;
+                })
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'data' => $user->load('sellerProfile')
+                'data' => $user->load('profile')
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -603,6 +653,256 @@ class CustomerSupplierController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to export data',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Request credit limit change
+     */
+    public function requestCreditLimitChange(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'user_id' => 'required|exists:users,id',
+                'requested_limit' => 'required|numeric|min:0',
+                'reason' => 'nullable|string|max:1000'
+            ]);
+
+            $user = User::with('profile')->findOrFail($validated['user_id']);
+            $currentLimit = $user->profile->credit_limit ?? 0;
+
+            $creditRequest = CreditLimitRequest::create([
+                'user_id' => $validated['user_id'],
+                'current_limit' => $currentLimit,
+                'requested_limit' => $validated['requested_limit'],
+                'reason' => $validated['reason'],
+                'status' => 'pending'
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Credit limit change request submitted successfully',
+                'data' => $creditRequest->load('user')
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit credit limit request',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all credit limit requests
+     */
+    public function getCreditLimitRequests(Request $request): JsonResponse
+    {
+        try {
+            $query = CreditLimitRequest::with(['user.profile', 'reviewer']);
+
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            $requests = $query->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 20));
+
+            return response()->json([
+                'success' => true,
+                'data' => $requests
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch credit limit requests',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Approve or reject credit limit request
+     */
+    public function reviewCreditLimitRequest(Request $request, $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'action' => 'required|in:approve,reject',
+                'review_notes' => 'nullable|string|max:1000'
+            ]);
+
+            $creditRequest = CreditLimitRequest::findOrFail($id);
+
+            if ($creditRequest->status !== 'pending') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This request has already been reviewed'
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            $creditRequest->update([
+                'status' => $validated['action'] === 'approve' ? 'approved' : 'rejected',
+                'reviewed_by' => Auth::id(),
+                'review_notes' => $validated['review_notes'],
+                'reviewed_at' => now()
+            ]);
+
+            // If approved, update the customer's credit limit
+            if ($validated['action'] === 'approve') {
+                $user = User::findOrFail($creditRequest->user_id);
+                $oldLimit = $user->profile->credit_limit ?? 0;
+
+                $user->profile()->update([
+                    'credit_limit' => $creditRequest->requested_limit
+                ]);
+
+                // Record in history
+                CreditLimitHistory::create([
+                    'user_id' => $user->id,
+                    'old_limit' => $oldLimit,
+                    'new_limit' => $creditRequest->requested_limit,
+                    'change_type' => 'request_approved',
+                    'changed_by' => Auth::id(),
+                    'reason' => $creditRequest->reason
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Credit limit request ' . ($validated['action'] === 'approve' ? 'approved' : 'rejected') . ' successfully',
+                'data' => $creditRequest->load(['user.profile', 'reviewer'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to review credit limit request',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get credit limit history for a customer
+     */
+    public function getCreditLimitHistory($userId): JsonResponse
+    {
+        try {
+            $history = CreditLimitHistory::where('user_id', $userId)
+                ->with(['admin'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $history
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch credit limit history',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Automatically adjust credit limit based on payment history
+     */
+    public function autoAdjustCreditLimit($userId): JsonResponse
+    {
+        try {
+            $user = User::with('profile')->findOrFail($userId);
+
+            // Calculate payment statistics
+            $stats = [
+                'total_paid' => Invoice::where('user_id', $userId)
+                    ->where('status', 'paid')
+                    ->sum('total_amount'),
+                'total_transactions' => Invoice::where('user_id', $userId)
+                    ->where('status', 'paid')
+                    ->count(),
+                'on_time_payments' => Invoice::where('user_id', $userId)
+                    ->where('status', 'paid')
+                    ->whereRaw('paid_at <= due_date')
+                    ->count(),
+                'late_payments' => Invoice::where('user_id', $userId)
+                    ->where('status', 'paid')
+                    ->whereRaw('paid_at > due_date')
+                    ->count(),
+                'overdue_count' => Invoice::where('user_id', $userId)
+                    ->where('status', 'overdue')
+                    ->count(),
+            ];
+
+            $currentLimit = $user->profile->credit_limit ?? 0;
+            $newLimit = $currentLimit;
+
+            // Calculate payment reliability score (0-100)
+            if ($stats['total_transactions'] > 0) {
+                $onTimeRate = ($stats['on_time_payments'] / $stats['total_transactions']) * 100;
+
+                // Increase credit limit if good payment history
+                if ($onTimeRate >= 90 && $stats['total_transactions'] >= 5 && $stats['overdue_count'] == 0) {
+                    $newLimit = $currentLimit * 1.25; // Increase by 25%
+                }
+                // Decrease if poor payment history
+                elseif ($onTimeRate < 50 || $stats['overdue_count'] > 3) {
+                    $newLimit = $currentLimit * 0.75; // Decrease by 25%
+                }
+            }
+
+            // Only update if there's a significant change (more than 5%)
+            if (abs($newLimit - $currentLimit) / $currentLimit > 0.05) {
+                DB::beginTransaction();
+
+                $user->profile()->update([
+                    'credit_limit' => $newLimit
+                ]);
+
+                CreditLimitHistory::create([
+                    'user_id' => $user->id,
+                    'old_limit' => $currentLimit,
+                    'new_limit' => $newLimit,
+                    'change_type' => 'automatic',
+                    'changed_by' => null,
+                    'reason' => 'Automatic adjustment based on payment history: ' .
+                                round($onTimeRate, 2) . '% on-time payment rate'
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Credit limit adjusted automatically',
+                    'data' => [
+                        'old_limit' => $currentLimit,
+                        'new_limit' => $newLimit,
+                        'stats' => $stats
+                    ]
+                ]);
+            } else {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No significant change needed',
+                    'data' => [
+                        'current_limit' => $currentLimit,
+                        'stats' => $stats
+                    ]
+                ]);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to auto-adjust credit limit',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }

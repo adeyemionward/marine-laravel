@@ -12,6 +12,18 @@ use Intervention\Image\Facades\Image;
 class FileStorageService
 {
     /**
+     * Determine which disk to use based on folder type
+     * Public images (banners, equipment, profiles) go to direct_public disk
+     * Private files go to local disk
+     */
+    private function getDiskForFolder($folder)
+    {
+        $publicFolders = ['banners', 'equipment', 'profiles', 'general'];
+
+        return in_array($folder, $publicFolders) ? 'direct_public' : 'public';
+    }
+
+    /**
      * Upload a single image using Laravel file storage
      */
     public function uploadImage($file, $folder = 'general', $options = [])
@@ -39,25 +51,28 @@ class FileStorageService
                 . '_' . Str::random(8)
                 . '.' . $extension;
 
+            // Determine which disk to use
+            $disk = $this->getDiskForFolder($folder);
+
             // Determine storage path
-            $storagePath = "images/{$folder}/{$filename}";
+            $storagePath = "{$folder}/{$filename}";
 
             // Store the file
             if (method_exists($file, 'storeAs')) {
                 // Laravel UploadedFile
-                $path = $file->storeAs("images/{$folder}", $filename, 'public');
+                $path = $file->storeAs($folder, $filename, $disk);
             } else {
                 // Handle other file types
-                $path = Storage::disk('public')->put($storagePath, file_get_contents($file));
+                $path = Storage::disk($disk)->put($storagePath, file_get_contents($file));
             }
 
             // Get file details
-            $fullPath = Storage::disk('public')->path($storagePath);
-            $fileSize = Storage::disk('public')->size($storagePath);
+            $fullPath = Storage::disk($disk)->path($storagePath);
+            $fileSize = Storage::disk($disk)->size($storagePath);
 
             // Generate absolute URL for the file
             // Use config app.url to ensure correct domain on production
-            $url = Storage::disk('public')->url($storagePath);
+            $url = Storage::disk($disk)->url($storagePath);
 
             // Ensure URL is absolute (important for GoDaddy hosting)
             if (!str_starts_with($url, 'http')) {
@@ -140,24 +155,27 @@ class FileStorageService
                 . '_' . Str::random(8)
                 . '.' . $extension;
 
+            // Determine which disk to use
+            $disk = $this->getDiskForFolder($folder);
+
             // Determine storage path
             $storagePath = "{$folder}/{$filename}";
 
             // Store the file
             if (method_exists($file, 'storeAs')) {
                 // Laravel UploadedFile
-                $path = $file->storeAs($folder, $filename, 'public');
+                $path = $file->storeAs($folder, $filename, $disk);
             } else {
                 // Handle other file types
-                $path = Storage::disk('public')->put($storagePath, file_get_contents($file));
+                $path = Storage::disk($disk)->put($storagePath, file_get_contents($file));
             }
 
             // Get file details
-            $fullPath = Storage::disk('public')->path($storagePath);
-            $fileSize = Storage::disk('public')->size($storagePath);
+            $fullPath = Storage::disk($disk)->path($storagePath);
+            $fileSize = Storage::disk($disk)->size($storagePath);
 
             // Generate absolute URL for the file
-            $url = Storage::disk('public')->url($storagePath);
+            $url = Storage::disk($disk)->url($storagePath);
 
             // Ensure URL is absolute (important for GoDaddy hosting)
             if (!str_starts_with($url, 'http')) {
@@ -250,13 +268,18 @@ class FileStorageService
     public function deleteImage($path)
     {
         try {
-            if (Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
+            // Try both disks
+            $disks = ['direct_public', 'public'];
 
-                return [
-                    'success' => true,
-                    'data' => ['result' => 'ok']
-                ];
+            foreach ($disks as $disk) {
+                if (Storage::disk($disk)->exists($path)) {
+                    Storage::disk($disk)->delete($path);
+
+                    return [
+                        'success' => true,
+                        'data' => ['result' => 'ok']
+                    ];
+                }
             }
 
             return [
@@ -279,12 +302,19 @@ class FileStorageService
         try {
             $deleted = [];
             $failed = [];
+            $disks = ['direct_public', 'public'];
 
             foreach ($paths as $path) {
-                if (Storage::disk('public')->exists($path)) {
-                    Storage::disk('public')->delete($path);
-                    $deleted[] = $path;
-                } else {
+                $found = false;
+                foreach ($disks as $disk) {
+                    if (Storage::disk($disk)->exists($path)) {
+                        Storage::disk($disk)->delete($path);
+                        $deleted[] = $path;
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) {
                     $failed[] = $path;
                 }
             }
@@ -315,16 +345,21 @@ class FileStorageService
         }
 
         try {
-            if (Storage::disk('public')->exists($path)) {
-                $url = Storage::disk('public')->url($path);
+            // Try both disks
+            $disks = ['direct_public', 'public'];
 
-                // Ensure URL is absolute (important for GoDaddy hosting)
-                if (!str_starts_with($url, 'http')) {
-                    $baseUrl = rtrim(config('app.url'), '/');
-                    $url = $baseUrl . $url;
+            foreach ($disks as $disk) {
+                if (Storage::disk($disk)->exists($path)) {
+                    $url = Storage::disk($disk)->url($path);
+
+                    // Ensure URL is absolute (important for GoDaddy hosting)
+                    if (!str_starts_with($url, 'http')) {
+                        $baseUrl = rtrim(config('app.url'), '/');
+                        $url = $baseUrl . $url;
+                    }
+
+                    return $url;
                 }
-
-                return $url;
             }
             return null;
         } catch (Exception $e) {
@@ -353,39 +388,44 @@ class FileStorageService
     public function getImageDetails($path)
     {
         try {
-            if (!Storage::disk('public')->exists($path)) {
-                return [
-                    'success' => false,
-                    'error' => 'File not found'
-                ];
-            }
+            // Try both disks
+            $disks = ['direct_public', 'public'];
 
-            $fullPath = Storage::disk('public')->path($path);
-            $url = Storage::disk('public')->url($path);
-            $size = Storage::disk('public')->size($path);
+            foreach ($disks as $disk) {
+                if (Storage::disk($disk)->exists($path)) {
+                    $fullPath = Storage::disk($disk)->path($path);
+                    $url = Storage::disk($disk)->url($path);
+                    $size = Storage::disk($disk)->size($path);
 
-            $width = null;
-            $height = null;
-            $format = pathinfo($path, PATHINFO_EXTENSION);
+                    $width = null;
+                    $height = null;
+                    $format = pathinfo($path, PATHINFO_EXTENSION);
 
-            if (file_exists($fullPath)) {
-                $imageInfo = getimagesize($fullPath);
-                if ($imageInfo) {
-                    $width = $imageInfo[0];
-                    $height = $imageInfo[1];
+                    if (file_exists($fullPath)) {
+                        $imageInfo = getimagesize($fullPath);
+                        if ($imageInfo) {
+                            $width = $imageInfo[0];
+                            $height = $imageInfo[1];
+                        }
+                    }
+
+                    return [
+                        'success' => true,
+                        'data' => [
+                            'path' => $path,
+                            'url' => $url,
+                            'bytes' => $size,
+                            'format' => $format,
+                            'width' => $width,
+                            'height' => $height
+                        ]
+                    ];
                 }
             }
 
             return [
-                'success' => true,
-                'data' => [
-                    'path' => $path,
-                    'url' => $url,
-                    'bytes' => $size,
-                    'format' => $format,
-                    'width' => $width,
-                    'height' => $height
-                ]
+                'success' => false,
+                'error' => 'File not found'
             ];
         } catch (Exception $e) {
             return [
