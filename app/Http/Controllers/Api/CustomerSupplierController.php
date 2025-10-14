@@ -907,4 +907,84 @@ class CustomerSupplierController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get customer payment history (invoices)
+     */
+    public function getCustomerPaymentHistory($customerId): JsonResponse
+    {
+        try {
+            $customer = User::findOrFail($customerId);
+
+            // Get all invoices for this customer
+            $invoices = Invoice::where('user_id', $customerId)
+                ->with(['subscriptionPlan:id,name'])
+                ->select([
+                    'id',
+                    'invoice_number',
+                    'total_amount',
+                    'status',
+                    'paid_at',
+                    'due_date',
+                    'invoice_type',
+                    'payment_method',
+                    'items',
+                    'created_at'
+                ])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            // Format invoices for payment history display
+            $payments = $invoices->map(function ($invoice) {
+                // Extract description from items or use invoice type
+                $description = 'Invoice Payment';
+                if ($invoice->items && is_array($invoice->items) && count($invoice->items) > 0) {
+                    $description = $invoice->items[0]['description'] ?? $invoice->items[0]['name'] ?? $invoice->invoice_type;
+                } else {
+                    $description = ucfirst(str_replace('_', ' ', $invoice->invoice_type));
+                }
+
+                return [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'amount' => $invoice->total_amount,
+                    'status' => $invoice->status,
+                    'payment_date' => $invoice->paid_at ? $invoice->paid_at->format('Y-m-d') : null,
+                    'due_date' => $invoice->due_date ? $invoice->due_date->format('Y-m-d') : null,
+                    'description' => $description,
+                    'payment_method' => $invoice->payment_method,
+                    'created_at' => $invoice->created_at->format('Y-m-d')
+                ];
+            });
+
+            // Calculate statistics
+            $stats = [
+                'total_paid' => $invoices->where('status', 'paid')->sum('total_amount'),
+                'total_pending' => $invoices->where('status', 'pending')->sum('total_amount'),
+                'total_overdue' => $invoices->where('status', 'pending')
+                    ->where('due_date', '<', now())
+                    ->sum('total_amount'),
+                'payment_count' => $invoices->count()
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'payments' => $payments,
+                    'stats' => $stats,
+                    'customer' => [
+                        'id' => $customer->id,
+                        'name' => $customer->name,
+                        'email' => $customer->email
+                    ]
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch payment history',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
 }
