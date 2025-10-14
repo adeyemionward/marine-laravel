@@ -112,7 +112,7 @@ class FileStorageService
     //     }
     // }
 
-    public function uploadImage($file, $folder = 'general', $options = [])
+//     public function uploadImage($file, $folder = 'general', $options = [])
 {
     try {
         // Log upload attempt
@@ -181,7 +181,7 @@ class FileStorageService
     }
 }
 
-
+211638 4241
     /**
      * Upload a single file (documents, PDFs, images, etc.)
      */

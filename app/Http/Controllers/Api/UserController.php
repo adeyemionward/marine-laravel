@@ -13,6 +13,8 @@ use App\Models\Message;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
 {
@@ -20,7 +22,7 @@ class UserController extends Controller
     {
         try {
             $user = Auth::user()->load('profile');
-            
+
             return response()->json([
                 'success' => true,
                 'data' => new UserResource($user),
@@ -76,7 +78,7 @@ class UserController extends Controller
     {
         try {
             $userId = Auth::user()->profile->id;
-            
+
             $listings = EquipmentListing::where('seller_id', $userId)
                 ->with(['category', 'seller'])
                 ->orderBy('created_at', 'desc')
@@ -185,7 +187,7 @@ class UserController extends Controller
                         'features' => $subscription->plan->features,
                         'max_listings' => $subscription->plan->max_listings,
                     ],
-                    'days_remaining' => $subscription->expires_at ? 
+                    'days_remaining' => $subscription->expires_at ?
                         max(0, $subscription->expires_at->diffInDays(now())) : null,
                 ],
             ]);
@@ -203,68 +205,68 @@ class UserController extends Controller
         try {
             $user = Auth::user();
             $userId = $user->id;
-            
+
             // Get current date ranges
             $today = now()->startOfDay();
             $lastWeek = now()->subWeek();
             $lastMonth = now()->subMonth();
-            
+
             // Active listings count
             $activeListings = EquipmentListing::where('seller_id', $userId)
                 ->where('status', 'active')
                 ->count();
-            
+
             $listingsLastMonth = EquipmentListing::where('seller_id', $userId)
                 ->where('status', 'active')
                 ->where('created_at', '>=', $lastMonth)
                 ->count();
-            
+
             $allListings = EquipmentListing::where('seller_id', $userId)
                 ->where('status', 'active')
                 ->count();
-                
-            $listingsChange = $allListings > 0 && $listingsLastMonth > 0 
-                ? round(($listingsLastMonth / max($allListings - $listingsLastMonth, 1)) * 100, 1) 
+
+            $listingsChange = $allListings > 0 && $listingsLastMonth > 0
+                ? round(($listingsLastMonth / max($allListings - $listingsLastMonth, 1)) * 100, 1)
                 : 0;
-            
+
             // Total views from all user listings
             $totalViews = EquipmentListing::where('seller_id', $userId)
                 ->sum('view_count') ?? 0;
-                
+
             $viewsLastMonth = EquipmentListing::where('seller_id', $userId)
                 ->where('updated_at', '>=', $lastMonth)
                 ->sum('view_count') ?? 0;
-                
-            $viewsChange = $totalViews > 0 && $viewsLastMonth > 0 
-                ? round(($viewsLastMonth / max($totalViews - $viewsLastMonth, 1)) * 100, 1) 
+
+            $viewsChange = $totalViews > 0 && $viewsLastMonth > 0
+                ? round(($viewsLastMonth / max($totalViews - $viewsLastMonth, 1)) * 100, 1)
                 : 0;
-            
+
             // Message/inquiry count (conversations where user is involved)
             $totalInquiries = Conversation::where(function($q) use ($userId) {
                 $q->where('buyer_id', $userId)
                   ->orWhere('seller_id', $userId);
             })->count();
-            
+
             $recentInquiries = Conversation::where(function($q) use ($userId) {
                 $q->where('buyer_id', $userId)
                   ->orWhere('seller_id', $userId);
             })->where('created_at', '>=', $lastMonth)->count();
-            
-            $inquiriesChange = $totalInquiries > 0 && $recentInquiries > 0 
+
+            $inquiriesChange = $totalInquiries > 0 && $recentInquiries > 0
                 ? round(($recentInquiries / max($totalInquiries - $recentInquiries, 1)) * 100, 1)
                 : 0;
-            
+
             // Favorites count - user_favorites uses user_id which references user_profiles.id
             $userProfile = $user->profile;
             $profileId = $userProfile ? $userProfile->id : null;
-            
+
             $savedItems = $profileId ? UserFavorite::where('user_id', $profileId)->count() : 0;
-            
+
             $recentFavorites = $profileId ? UserFavorite::where('user_id', $profileId)
                 ->where('created_at', '>=', $lastMonth)
                 ->count() : 0;
-                
-            $favoritesChange = $savedItems > 0 && $recentFavorites > 0 
+
+            $favoritesChange = $savedItems > 0 && $recentFavorites > 0
                 ? round(($recentFavorites / max($savedItems - $recentFavorites, 1)) * 100, 1)
                 : 0;
 
@@ -295,16 +297,16 @@ class UserController extends Controller
         try {
             $user = Auth::user();
             $userId = $user->id;
-            
+
             // Get recent activities
             $activities = [];
-            
+
             // Recent listings
             $recentListings = EquipmentListing::where('seller_id', $userId)
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get(['id', 'title', 'status', 'created_at', 'view_count']);
-                
+
             foreach ($recentListings as $listing) {
                 $activities[] = [
                     'type' => 'listing_created',
@@ -318,17 +320,17 @@ class UserController extends Controller
                     ]
                 ];
             }
-            
+
             // Recent favorites - use profile id
             $userProfile = $user->profile;
             $profileId = $userProfile ? $userProfile->id : null;
-            
+
             $recentFavorites = $profileId ? UserFavorite::where('user_id', $profileId)
                 ->with('listing:id,title')
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get() : collect();
-                
+
             foreach ($recentFavorites as $favorite) {
                 $activities[] = [
                     'type' => 'favorite_added',
@@ -340,10 +342,10 @@ class UserController extends Controller
                     ]
                 ];
             }
-            
+
             // Recent messages - use profile id
             $profileId = $userProfile ? $userProfile->id : null;
-            
+
             $recentMessages = $profileId ? Message::whereHas('conversation', function($q) use ($profileId) {
                 $q->where('buyer_id', $profileId)
                   ->orWhere('seller_id', $profileId);
@@ -352,7 +354,7 @@ class UserController extends Controller
             ->orderBy('created_at', 'desc')
             ->limit(5)
             ->get(['id', 'content', 'created_at']) : collect();
-            
+
             foreach ($recentMessages as $message) {
                 $activities[] = [
                     'type' => 'message_received',
@@ -364,12 +366,12 @@ class UserController extends Controller
                     ]
                 ];
             }
-            
+
             // Sort all activities by date
             usort($activities, function($a, $b) {
                 return $b['date'] <=> $a['date'];
             });
-            
+
             // Take only the most recent 20
             $activities = array_slice($activities, 0, 20);
 
@@ -391,69 +393,69 @@ class UserController extends Controller
         try {
             $user = Auth::user();
             $userId = $user->id;
-            
+
             // Get current date ranges for stats calculation
             $today = now()->startOfDay();
             $lastWeek = now()->subWeek();
             $lastMonth = now()->subMonth();
-            
+
             // Calculate stats directly instead of calling other methods
             // Active listings count
             $activeListings = EquipmentListing::where('seller_id', $userId)
                 ->where('status', 'active')
                 ->count();
-            
+
             $listingsLastMonth = EquipmentListing::where('seller_id', $userId)
                 ->where('status', 'active')
                 ->where('created_at', '>=', $lastMonth)
                 ->count();
-            
+
             $allListings = EquipmentListing::where('seller_id', $userId)
                 ->where('status', 'active')
                 ->count();
-                
-            $listingsChange = $allListings > 0 && $listingsLastMonth > 0 
-                ? round(($listingsLastMonth / max($allListings - $listingsLastMonth, 1)) * 100, 1) 
+
+            $listingsChange = $allListings > 0 && $listingsLastMonth > 0
+                ? round(($listingsLastMonth / max($allListings - $listingsLastMonth, 1)) * 100, 1)
                 : 0;
-            
+
             // Total views from all user listings
             $totalViews = EquipmentListing::where('seller_id', $userId)
                 ->sum('view_count') ?? 0;
-                
+
             $viewsLastMonth = EquipmentListing::where('seller_id', $userId)
                 ->where('updated_at', '>=', $lastMonth)
                 ->sum('view_count') ?? 0;
-                
-            $viewsChange = $totalViews > 0 && $viewsLastMonth > 0 
-                ? round(($viewsLastMonth / max($totalViews - $viewsLastMonth, 1)) * 100, 1) 
+
+            $viewsChange = $totalViews > 0 && $viewsLastMonth > 0
+                ? round(($viewsLastMonth / max($totalViews - $viewsLastMonth, 1)) * 100, 1)
                 : 0;
-            
+
             // Message/inquiry count (conversations where user is involved)
             $totalInquiries = Conversation::where(function($q) use ($userId) {
                 $q->where('buyer_id', $userId)
                   ->orWhere('seller_id', $userId);
             })->count();
-            
+
             $recentInquiries = Conversation::where(function($q) use ($userId) {
                 $q->where('buyer_id', $userId)
                   ->orWhere('seller_id', $userId);
             })->where('created_at', '>=', $lastMonth)->count();
-            
-            $inquiriesChange = $totalInquiries > 0 && $recentInquiries > 0 
+
+            $inquiriesChange = $totalInquiries > 0 && $recentInquiries > 0
                 ? round(($recentInquiries / max($totalInquiries - $recentInquiries, 1)) * 100, 1)
                 : 0;
-            
+
             // Favorites count - user_favorites uses user_id which references user_profiles.id
             $userProfile = $user->profile;
             $profileId = $userProfile ? $userProfile->id : null;
-            
+
             $savedItems = $profileId ? UserFavorite::where('user_id', $profileId)->count() : 0;
-            
+
             $recentFavorites = $profileId ? UserFavorite::where('user_id', $profileId)
                 ->where('created_at', '>=', $lastMonth)
                 ->count() : 0;
-                
-            $favoritesChange = $savedItems > 0 && $recentFavorites > 0 
+
+            $favoritesChange = $savedItems > 0 && $recentFavorites > 0
                 ? round(($recentFavorites / max($savedItems - $recentFavorites, 1)) * 100, 1)
                 : 0;
 
@@ -467,16 +469,16 @@ class UserController extends Controller
                 'savedItems' => $savedItems,
                 'favoritesChange' => $favoritesChange,
             ];
-            
+
             // Get recent activities
             $activities = [];
-            
+
             // Recent listings
             $recentListingsData = EquipmentListing::where('seller_id', $userId)
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get(['id', 'title', 'status', 'created_at', 'view_count']);
-                
+
             foreach ($recentListingsData as $listing) {
                 $activities[] = [
                     'type' => 'listing_created',
@@ -490,17 +492,17 @@ class UserController extends Controller
                     ]
                 ];
             }
-            
+
             // Recent favorites - use profile id
             $userProfile = $user->profile;
             $profileId = $userProfile ? $userProfile->id : null;
-            
+
             $recentFavoritesData = $profileId ? UserFavorite::where('user_id', $profileId)
                 ->with('listing:id,title')
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get() : collect();
-                
+
             foreach ($recentFavoritesData as $favorite) {
                 if ($favorite->listing) {
                     $activities[] = [
@@ -514,22 +516,22 @@ class UserController extends Controller
                     ];
                 }
             }
-            
+
             // Sort all activities by date
             usort($activities, function($a, $b) {
                 return $b['date'] <=> $a['date'];
             });
-            
+
             // Take only the most recent 10
             $recentActivity = array_slice($activities, 0, 10);
-            
+
             // Get subscription info
             $subscription = null;
             $activeSubscription = Subscription::where('user_id', $userId)
                 ->with('plan')
                 ->where('status', 'active')
                 ->first();
-                
+
             if ($activeSubscription && $activeSubscription->plan) {
                 $subscription = [
                     'id' => $activeSubscription->id,
@@ -546,24 +548,24 @@ class UserController extends Controller
                         'features' => $activeSubscription->plan->features,
                         'max_listings' => $activeSubscription->plan->max_listings,
                     ],
-                    'days_remaining' => $activeSubscription->expires_at ? 
+                    'days_remaining' => $activeSubscription->expires_at ?
                         max(0, $activeSubscription->expires_at->diffInDays(now())) : null,
                 ];
             }
-            
+
             // Get recent listings with category
             $recentListings = EquipmentListing::where('seller_id', $userId)
                 ->with('category')
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get(['id', 'title', 'price', 'status', 'created_at', 'category_id', 'view_count']);
-            
+
             // Get recent messages count - check if Message model exists
             $unreadMessages = 0;
             if (class_exists('App\Models\Message') && class_exists('App\Models\Conversation')) {
                 // Messages uses sender_id which references user_profiles.id
                 $profileId = $user->profile ? $user->profile->id : null;
-                
+
                 if ($profileId) {
                     $unreadMessages = Message::whereHas('conversation', function($q) use ($profileId) {
                         $q->where('buyer_id', $profileId)
@@ -598,6 +600,109 @@ class UserController extends Controller
                 'message' => 'Failed to fetch dashboard overview',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+
+    public function assignRole(Request $request, $id){
+        try{
+
+            DB::beginTransaction();
+
+            $validator = Validator::make($request->all(), [
+                'role_id' => 'required|integer|exists:roles,id',
+            ]);
+
+
+            if ($validator->fails()) {
+                return $this->jsonResponse(true, 422, "Validation failed", ['errors' => $validator->errors()], false, false);
+            }
+
+            $user = User::find($id);
+            if(is_null($user)){
+                return $this->jsonResponse(true, 200, "The user cannot be found", [], false, false);
+            }
+
+            $roleId = $request->input('role_id');
+            $role = Role::find($roleId);
+            if(is_null($role)){
+                return $this->jsonResponse(true, 200, "The role cannot be found", [], false, false);
+            }
+
+            $assignRoleId = Role::find($request->input('role_id'));
+            $user->assignRole($assignRoleId);
+
+            $role = Role::with('permissions')->where('id', request('role_id'))->first();
+
+            if ($role) {
+                $permissions = $role->permissions;
+                $user->syncPermissions($permissions);
+            } else {
+                // Handle the case where the role doesn't exist
+                return $this->jsonResponse(true, 200, "Role does not exist", [], false, false);
+            }
+            $user->role_id  = $roleId;
+
+            $user->update();
+            DB::commit();
+
+            // Redirect to dashboard (or any route after login)
+            return $this->jsonResponse(true, 200, "Role Assigned successfully", $user, false, false);
+
+        } catch (\Exception $th) {
+            DB::rollBack();
+
+            return $this->jsonResponse(true, 500, "Error assigning role. Please try later", ['error' => $th->getMessage()], false, false);
+        }
+    }
+
+    public function detachRole(Request $request, $id){
+        DB::beginTransaction();
+        // Validate that role_id is provided
+        $validator = Validator::make($request->all(), [
+                'role_id' => 'required|integer|exists:roles,id',
+            ]);
+
+        if ($validator->fails()) {
+            return $this->jsonResponse(true, 422, "Validation failed", ['errors' => $validator->errors()], false, false);
+        }
+
+        try {
+            // 1. Find the user by their ID
+            $user = User::find($id);
+            if (!$user) {
+                // Use a 404 Not Found status code for missing resources
+                return $this->jsonResponse(false, 404, "User not found.", [], false, false);
+            }
+
+            // 2. Find the role to be detached
+            // The validation above already ensures the role exists
+            $role = $request->input('role_id');
+            if ($user->role_id != $role) {
+                return $this->jsonResponse(false, 400, "This user does not have the specified role.");
+            }
+
+            // 4. Detach the role from the user
+            // This is the correct method to use. It will automatically update the model_has_roles table.
+            $user->role_id = null;
+            $updateRole = $user->update();
+            if($updateRole){
+               $deletedRows = DB::table('model_has_roles')
+                 ->where('model_id', $id)
+                 ->where('role_id', $role)
+                 ->delete();
+            }
+            DB::commit();
+            // 5. Return a success response
+            return $this->jsonResponse(true, 200, "Role detached successfully.", false, false, false);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // Log the error for debugging purposes
+            Log::error('ROLE_DETACH_FAILED', ['error' => $e->getMessage(), 'user_id' => $id]);
+
+            // Use a 500 Internal Server Error status code for exceptions
+            return $this->jsonResponse(false, 500, "An error occurred. Please try again later.", [], false, false);
         }
     }
 }
