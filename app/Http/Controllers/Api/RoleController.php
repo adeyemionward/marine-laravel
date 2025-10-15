@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -15,6 +16,17 @@ class RoleController extends Controller
 {
     public function listRoles()
     {
+
+        $user = Auth::user();
+
+        // Check if the user has access
+        if (!$user->hasAccess('role-list')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not authorized to view this page.',
+            ], 403);
+        }
+
         $roles = Role::select('id', 'name','guard_name')->where('guard_name', 'api')->get();
 
         return response()->json([
@@ -238,68 +250,137 @@ class RoleController extends Controller
 
 
 
-        public function assignRole(Request $request, $id)
-    {
-        try {
-            DB::beginTransaction();
+    //     public function assignRole(Request $request, $id)
+    // {
+    //     try {
+    //         DB::beginTransaction();
 
-            $validator = Validator::make($request->all(), [
-                'role_id' => 'required|integer|exists:roles,id',
-            ]);
+    //         $validator = Validator::make($request->all(), [
+    //             'role_id' => 'required|integer|exists:roles,id',
+    //         ]);
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
+    //         if ($validator->fails()) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'Validation failed',
+    //                 'errors' => $validator->errors()
+    //             ], 422);
+    //         }
 
-            $user = User::find($id);
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The user cannot be found'
-                ], 404);
-            }
+    //         $user = User::find($id);
+    //         if (!$user) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'The user cannot be found'
+    //             ], 404);
+    //         }
 
-            $roleId = $request->input('role_id');
-            $role = Role::find($roleId);
-            if (!$role) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The role cannot be found'
-                ], 404);
-            }
+    //         $roleId = $request->input('role_id');
+    //         $role = Role::find($roleId);
+    //         if (!$role) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'The role cannot be found'
+    //             ], 404);
+    //         }
 
-            // Assign role
-            $user->assignRole($role);
+    //         // Assign role
+    //         $user->assignRole($role);
 
-            // Sync permissions from role
-            $permissions = $role->permissions;
-            $user->syncPermissions($permissions);
+    //         // Sync permissions from role
+    //         $permissions = $role->permissions;
+    //         $user->syncPermissions($permissions);
 
-            // Save role_id in users table (if you have that column)
-            $user->spatie_role_id = $roleId;
-            $user->save();
+    //         // Save role_id in users table (if you have that column)
+    //         $user->spatie_role_id = $roleId;
+    //         $user->save();
 
-            DB::commit();
+    //         DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Role assigned successfully',
-                'data' => $user
-            ], 200);
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'Role assigned successfully',
+    //             'data' => $user
+    //         ], 200);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Error assigning role. Please try later',
+    //             'error' => $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+
+    public function assignRole(Request $request, $id)
+{
+    try {
+        DB::beginTransaction();
+
+        // Validate input
+        $validator = Validator::make($request->all(), [
+            'role_id' => 'required|integer|exists:roles,id',
+        ]);
+
+        if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error assigning role. Please try later',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
+
+        // Find user
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The user cannot be found'
+            ], 404);
+        }
+
+        // Find role
+        $role = Role::find($request->input('role_id'));
+        if (!$role) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The role cannot be found'
+            ], 404);
+        }
+
+        // Assign role
+        $user->assignRole($role);
+
+        // Sync direct permissions from role to model_has_permissions
+        $permissions = $role->permissions->pluck('name')->toArray(); // get permission names
+
+        if (!empty($permissions)) {
+            $user->syncPermissions($permissions); // fills model_has_permissions
+        }
+
+        // Optional: save role_id in users table if you have that column
+        $user->spatie_role_id = $role->id;
+        $user->save();
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Role assigned successfully with permissions',
+            'data' => $user
+        ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'success' => false,
+            'message' => 'Error assigning role. Please try later',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
 
     public function detachRole(Request $request, $id)
     {

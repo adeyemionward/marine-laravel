@@ -19,6 +19,7 @@ class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasApiTokens,HasRoles;
+     protected $guard_name = 'api';
 
     /**
      * The attributes that are mass assignable.
@@ -267,12 +268,34 @@ class User extends Authenticatable implements MustVerifyEmail
         }
     }
 
-     public function getJWTIdentifier()
-    { return $this->getKey(); }
+    /**
+     * Check if user has access based on email and active status.
+     * Admin email bypasses all checks.
+     */
 
-    public function getJWTCustomClaims()
+
+    public function hasAccess($access)
     {
-        return [];
+        if ($this->email === 'admin@marine.ng') return true;
+        if ($this->active_status != self::ACTIVE) return false;
+
+        // Make sure the trait is present
+        if (!$this->hasPermissionTo($access)) {
+            return false;
+        }
+
+        return true;
     }
 
+    //  public function hasAccess($access)
+    // {
+    //     if($this->email == 'admin@gmail.com') return true;
+    //     if($this->active_status != User::ACTIVE){
+    //             return 'yy';
+    //     } //Account not active
+    //     if (!auth()->user() || !auth()->user()->hasPermissionTo($access, 'api')) {
+    //         return false;
+    //     }
+    //     return true;
+    // }
 }
