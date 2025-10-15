@@ -2036,14 +2036,17 @@ class AdminController extends Controller
                 ];
             }
 
-            // Generate time-series data for revenue (from invoices)
+            // Generate time-series data for revenue (from financial transactions only)
             $revenueData = [];
             for ($i = $days - 1; $i >= 0; $i--) {
                 $date = Carbon::now()->subDays($i);
-                $revenue = \DB::table('invoices')
-                    ->whereDate('paid_at', $date)
-                    ->where('status', 'paid')
-                    ->sum('total_amount');
+
+                // Revenue from financial transactions only (to match Financial Reports)
+                $revenue = \DB::table('financial_transactions')
+                    ->whereDate('transaction_date', $date)
+                    ->where('transaction_type', 'income')
+                    ->sum('amount');
+
                 $revenueData[] = [
                     'name' => $date->format('M d'),
                     'value' => (int) $revenue,
@@ -2097,7 +2100,12 @@ class AdminController extends Controller
             $totalUsers = User::count();
             $totalListings = EquipmentListing::count();
             $activeListings = EquipmentListing::where('status', 'active')->count();
-            $totalRevenue = \DB::table('invoices')->where('status', 'paid')->sum('total_amount');
+
+            // Calculate total revenue from financial transactions only (to match Financial Reports)
+            $totalRevenue = \DB::table('financial_transactions')
+                ->where('transaction_type', 'income')
+                ->sum('amount');
+
             $totalViews = EquipmentListing::sum('view_count');
 
             // Recent activity

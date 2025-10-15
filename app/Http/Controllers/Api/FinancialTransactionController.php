@@ -66,8 +66,8 @@ class FinancialTransactionController extends Controller
     public function getTransactions(Request $request): JsonResponse
     {
         try {
-            // Only eager load relationships that are safe
-            $query = FinancialTransaction::query();
+            // Eager load user and recordedBy relationships
+            $query = FinancialTransaction::with(['user:id,name,email', 'recordedBy:id,name,email']);
 
             // Apply filters
             if ($request->filled('type')) {
@@ -137,6 +137,7 @@ class FinancialTransactionController extends Controller
             $validator = Validator::make($request->all(), [
                 'transaction_type' => 'required|in:income,expense',
                 'category' => 'required|string|max:100',
+                'customer' => 'nullable|exists:users,id',
                 'amount' => 'required|numeric|min:0',
                 'description' => 'required|string|max:1000',
                 'notes' => 'nullable|string|max:2000',
@@ -164,7 +165,7 @@ class FinancialTransactionController extends Controller
                 'transaction_date' => $request->transaction_date,
                 'payment_method' => $request->payment_method,
                 'payment_reference' => $request->payment_reference,
-                'user_id' => $request->user_id,
+                'user_id' => $request->customer,
                 'recorded_by' => auth()->id(),
                 'payment_status' => 'completed'
             ]);

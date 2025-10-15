@@ -463,6 +463,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/customers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomers']);
         Route::get('/customers/stats', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomerStats']);
         Route::get('/customers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomerDetails']);
+        Route::get('/customers/{id}/payment-history', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getCustomerPaymentHistory']);
         Route::post('/customers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'createOrUpdateCustomer']);
         Route::put('/customers/{id}', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'createOrUpdateCustomer']);
         Route::get('/suppliers', [\App\Http\Controllers\Api\CustomerSupplierController::class, 'getSuppliers']);

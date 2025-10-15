@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('email_settings', function (Blueprint $table) {
+        Schema::create('email_settings1', function (Blueprint $table) {
             $table->id();
             $table->string('driver')->default('smtp'); // smtp, ses, mailgun, etc.
             $table->string('host')->nullable();

@@ -14,10 +14,24 @@ class CategoryController extends Controller
     public function index(): JsonResponse
     {
         try {
-            $categories = EquipmentCategory::active()
+            // For admin, return all categories with all necessary fields
+            // For public, only return active categories
+            $categories = EquipmentCategory::query()
+                ->withCount(['listings', 'children'])
                 ->orderBy('sort_order')
                 ->orderBy('name')
-                ->get(['id', 'name', 'slug', 'description', 'icon_name', 'sort_order']);
+                ->get([
+                    'id',
+                    'name',
+                    'slug',
+                    'description',
+                    'icon_name',
+                    'sort_order',
+                    'parent_id',
+                    'is_active',
+                    'created_at',
+                    'updated_at'
+                ]);
 
             return response()->json([
                 'success' => true,
@@ -68,15 +82,21 @@ class CategoryController extends Controller
     public function getStats(): JsonResponse
     {
         try {
+            // Count categories with parent/child relationships
+            $mainCategories = EquipmentCategory::whereNull('parent_id')->count();
+            $subcategories = EquipmentCategory::whereNotNull('parent_id')->count();
+
             $stats = [
-                'total_categories' => EquipmentCategory::count(),
-                'active_categories' => EquipmentCategory::where('is_active', true)->count(),
-                'inactive_categories' => EquipmentCategory::where('is_active', false)->count(),
-                'categories_with_listings' => EquipmentCategory::whereHas('listings')->count(),
-                'empty_categories' => EquipmentCategory::doesntHave('listings')->count(),
-                'total_listings' => EquipmentListing::count(),
-                'avg_listings_per_category' => round(EquipmentListing::count() / max(EquipmentCategory::count(), 1), 2),
-                'most_popular_category' => EquipmentCategory::withCount('listings')
+                'totalCategories' => EquipmentCategory::count(),
+                'activeCategories' => EquipmentCategory::where('is_active', true)->count(),
+                'inactiveCategories' => EquipmentCategory::where('is_active', false)->count(),
+                'mainCategories' => $mainCategories,
+                'subcategories' => $subcategories,
+                'categoriesWithListings' => EquipmentCategory::whereHas('listings')->count(),
+                'emptyCategories' => EquipmentCategory::doesntHave('listings')->count(),
+                'totalListings' => EquipmentListing::count(),
+                'avgListingsPerCategory' => round(EquipmentListing::count() / max(EquipmentCategory::count(), 1), 2),
+                'mostPopularCategory' => EquipmentCategory::withCount('listings')
                     ->orderBy('listings_count', 'desc')
                     ->first(['name', 'listings_count']),
             ];
@@ -112,6 +132,7 @@ class CategoryController extends Controller
             $validated = $request->validate([
                 'name' => 'required|string|max:255|unique:equipment_categories,name',
                 'description' => 'nullable|string|max:500',
+                'parent_id' => 'nullable|exists:equipment_categories,id',
                 'icon_name' => 'nullable|string|max:100',
                 'sort_order' => 'nullable|integer|min:0',
                 'status' => 'nullable|in:active,inactive'
@@ -148,6 +169,7 @@ class CategoryController extends Controller
             $validated = $request->validate([
                 'name' => 'required|string|max:255|unique:equipment_categories,name,' . $id,
                 'description' => 'nullable|string|max:500',
+                'parent_id' => 'nullable|exists:equipment_categories,id',
                 'icon_name' => 'nullable|string|max:100',
                 'sort_order' => 'nullable|integer|min:0',
                 'status' => 'nullable|in:active,inactive'
