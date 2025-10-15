@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\Communication\NewsletterSettingsController;
 use App\Http\Controllers\Api\SystemMonitorController;
 use App\Http\Controllers\Api\Admin\ApiKeyController;
 use App\Http\Controllers\Api\PlatformSettingsController;
+use App\Http\Controllers\Api\RoleController;
 use App\Models\EmailConfig;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Log;
@@ -682,6 +683,36 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             });
         });
 
+
+        Route::prefix('roles')->group(function () {
+
+            // List all roles (GET)
+            Route::get('/', [RoleController::class, 'listRoles']);
+
+            // List roles with permissions & pagination (GET)
+            Route::get('/with-permissions', [RoleController::class, 'listRolesWithPermissions']);
+
+            // Get all permissions (GET)
+            Route::get('/permissions', [RoleController::class, 'getPermissions']);
+
+            // Create a role (POST)
+            Route::post('/', [RoleController::class, 'create']);
+
+            // View a role and its permissions (GET)
+            Route::get('/{id}', [RoleController::class, 'view']);
+
+            // Update a role (PUT/PATCH)
+            Route::post('/update/{id}', [RoleController::class, 'update']);
+
+            // Delete a role (DELETE)
+            Route::delete('/{id}', [RoleController::class, 'destroy']);
+
+            // Assign a role to a user (POST)
+            Route::post('/assign/{userId}', [RoleController::class, 'assignRole']);
+
+            // Detach a role from a user (POST)
+            Route::post('/detach/{userId}', [RoleController::class, 'detachRole']);
+    }   );
 
     });
 });

@@ -10,10 +10,12 @@ use App\Models\UserFavorite;
 use App\Models\Subscription;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
@@ -602,6 +604,8 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+
 
 
 }

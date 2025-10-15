@@ -12,11 +12,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Traits\HasRoles;
+use Spatie\Permission\Models\Role;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens,HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -264,4 +266,13 @@ class User extends Authenticatable implements MustVerifyEmail
             return false;
         }
     }
+
+     public function getJWTIdentifier()
+    { return $this->getKey(); }
+
+    public function getJWTCustomClaims()
+    {
+        return [];
+    }
+
 }
