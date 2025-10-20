@@ -27,8 +27,19 @@ class UserResource extends JsonResource
                     'id' => $this->role->id,
                     'name' => $this->role->name,
                     'display_name' => $this->role->display_name ?? $this->role->name,
+                    'permissions' => $this->role->permissions ?? [],
                 ];
             }),
+            // Direct permissions (Spatie)
+            'permissions' => $this->when(
+                method_exists($this->resource, 'getAllPermissions'),
+                fn() => $this->getAllPermissions()->pluck('name')
+            ),
+            // Role object with permissions (Spatie)
+            'roles' => $this->when(
+                method_exists($this->resource, 'getRoleNames'),
+                fn() => $this->getRoleNames()
+            ),
             'is_seller' => $this->isSeller(),
             'seller_profile' => $this->whenLoaded('sellerProfile'),
             'subscriptions' => $this->whenLoaded('subscriptions'),

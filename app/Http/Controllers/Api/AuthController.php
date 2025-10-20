@@ -8,7 +8,6 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Models\UserProfile;
-use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -28,21 +27,16 @@ class AuthController extends Controller
         try {
             DB::beginTransaction();
 
-            // Get default user role
-            $userRole = Role::where('name', 'user')->first();
-            
-            if (!$userRole) {
-                throw new \Exception('Default user role not found. Please contact administrator.');
-            }
-
             // Create user
             $user = User::create([
                 'name' => $request->full_name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'role_id' => $userRole->id,
                 'email_verified_at' => null, // Will be verified via email
             ]);
+
+            // Assign default 'user' role using Spatie
+            $user->assignRole('user');
 
             // Create user profile
             $profile = UserProfile::create([
@@ -69,7 +63,7 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Registration successful',
                 'data' => [
-                    'user' => new UserResource($user->load(['profile', 'role', 'sellerProfile'])),
+                    'user' => new UserResource($user->load(['profile', 'roles', 'sellerProfile'])),
                     'token' => $token,
                     'token_type' => 'Bearer',
                 ],
@@ -122,7 +116,7 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Login successful',
                 'data' => [
-                    'user' => new UserResource($user->load(['profile', 'role', 'sellerProfile'])),
+                    'user' => new UserResource($user->load(['profile', 'roles', 'sellerProfile'])),
                     'token' => $token,
                     'token_type' => 'Bearer',
                 ],
@@ -186,7 +180,7 @@ class AuthController extends Controller
     public function user(Request $request): JsonResponse
     {
         try {
-            $user = $request->user()->load(['profile', 'role', 'sellerProfile']);
+            $user = $request->user()->load(['profile', 'roles', 'sellerProfile']);
 
             return response()->json([
                 'success' => true,
@@ -220,7 +214,7 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Token refreshed successfully',
                 'data' => [
-                    'user' => new UserResource($user->load(['profile', 'role', 'sellerProfile'])),
+                    'user' => new UserResource($user->load(['profile', 'roles', 'sellerProfile'])),
                     'token' => $token,
                     'token_type' => 'Bearer',
                 ],

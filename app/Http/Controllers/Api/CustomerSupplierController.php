@@ -319,7 +319,7 @@ class CustomerSupplierController extends Controller
     public function createOrUpdateCustomer(Request $request, $id = null): JsonResponse
     {
         try {
-            $validated = $request->validate([
+            $validator = \Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email,' . $id,
                 'phone' => 'nullable|string|max:20',
@@ -336,21 +336,44 @@ class CustomerSupplierController extends Controller
                 'status' => 'nullable|in:active,inactive,pending,suspended'
             ]);
 
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+
             if ($id) {
                 $user = User::findOrFail($id);
                 $user->update(['name' => $validated['name'], 'email' => $validated['email']]);
                 $message = 'Customer updated successfully';
             } else {
+                // Get or create customer role
+                $customerRole = \App\Models\Role::where('name', 'customer')->first();
+                if (!$customerRole) {
+                    // Create customer role if it doesn't exist
+                    $customerRole = \App\Models\Role::create([
+                        'name' => 'customer',
+                        'display_name' => 'Customer',
+                        'description' => 'Customer role'
+                    ]);
+                }
+
                 $user = User::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
-                    'password' => bcrypt('temp_password_' . uniqid())
+                    'password' => bcrypt('temp_password_' . uniqid()),
+                    'role_id' => $customerRole->id
                 ]);
                 $message = 'Customer created successfully';
             }
 
             // Update or create user profile with customer-specific info
             $profileData = [
+                'full_name' => $validated['name'], // Add full_name field
                 'phone_number' => $request->phone,
                 'address' => $request->address,
                 'city' => $request->city,
@@ -486,7 +509,7 @@ class CustomerSupplierController extends Controller
     public function createOrUpdateSupplier(Request $request, $id = null): JsonResponse
     {
         try {
-            $validated = $request->validate([
+            $validator = \Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email,' . $id,
                 'phone' => 'nullable|string|max:20',
@@ -504,29 +527,45 @@ class CustomerSupplierController extends Controller
                 'status' => 'nullable|in:active,inactive,pending,suspended'
             ]);
 
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+
             if ($id) {
                 $user = User::findOrFail($id);
                 $user->update(['name' => $validated['name'], 'email' => $validated['email']]);
                 $message = 'Supplier updated successfully';
             } else {
+                // Get or create seller role
+                $sellerRole = \App\Models\Role::where('name', 'seller')->first();
+                if (!$sellerRole) {
+                    // Create seller role if it doesn't exist
+                    $sellerRole = \App\Models\Role::create([
+                        'name' => 'seller',
+                        'display_name' => 'Seller',
+                        'description' => 'Seller/Supplier role'
+                    ]);
+                }
+
                 $user = User::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
-                    'password' => bcrypt('temp_password_' . uniqid())
+                    'password' => bcrypt('temp_password_' . uniqid()),
+                    'role_id' => $sellerRole->id
                 ]);
-
-                // Assign seller role
-                $sellerRole = \App\Models\Role::where('name', 'seller')->first();
-                if ($sellerRole) {
-                    $user->role_id = $sellerRole->id;
-                    $user->save();
-                }
 
                 $message = 'Supplier created successfully';
             }
 
             // Update or create user profile with supplier-specific info
             $profileData = [
+                'full_name' => $validated['name'], // Add full_name field
                 'phone_number' => $request->phone,
                 'address' => $request->address,
                 'city' => $request->city,

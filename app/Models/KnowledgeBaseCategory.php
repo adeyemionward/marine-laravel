@@ -23,6 +23,23 @@ class KnowledgeBaseCategory extends Model
         'created_by',
     ];
 
+    /**
+     * Validation rules for creating/updating categories
+     */
+    public static function rules($id = null)
+    {
+        return [
+            'name' => 'required|string|max:255|unique:knowledge_base_categories,name' . ($id ? ",$id" : ''),
+            'slug' => 'nullable|string|max:255|unique:knowledge_base_categories,slug' . ($id ? ",$id" : ''),
+            'description' => 'nullable|string',
+            'icon' => 'nullable|string|max:100',
+            'color' => 'nullable|string|max:7',
+            'sort_order' => 'integer|min:0',
+            'is_active' => 'boolean',
+            'created_by' => 'required|exists:users,id',
+        ];
+    }
+
     protected $casts = [
         'is_active' => 'boolean',
         'sort_order' => 'integer',

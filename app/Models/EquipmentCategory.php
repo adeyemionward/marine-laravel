@@ -22,6 +22,22 @@ class EquipmentCategory extends Model
         'sort_order',
     ];
 
+    /**
+     * Validation rules for creating/updating categories
+     */
+    public static function rules($id = null)
+    {
+        return [
+            'name' => 'required|string|max:255|unique:equipment_categories,name' . ($id ? ",$id" : ''),
+            'slug' => 'nullable|string|max:255|unique:equipment_categories,slug' . ($id ? ",$id" : ''),
+            'description' => 'nullable|string',
+            'icon_name' => 'nullable|string|max:100',
+            'parent_id' => 'nullable|exists:equipment_categories,id',
+            'is_active' => 'boolean',
+            'sort_order' => 'integer|min:0',
+        ];
+    }
+
     protected $casts = [
         'is_active' => 'boolean',
         'sort_order' => 'integer',

@@ -686,32 +686,35 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
         Route::prefix('roles')->group(function () {
 
-            // List all roles (GET)
-            Route::get('/', [RoleController::class, 'listRoles']);
+            // List all roles (GET) - view_roles permission
+            Route::get('/', [RoleController::class, 'listRoles'])->middleware('permission:view_roles');
 
-            // List roles with permissions & pagination (GET)
-            Route::get('/with-permissions', [RoleController::class, 'listRolesWithPermissions']);
+            // List roles with permissions & pagination (GET) - view_roles permission
+            Route::get('/with-permissions', [RoleController::class, 'listRolesWithPermissions'])->middleware('permission:view_roles');
 
-            // Get all permissions (GET)
-            Route::get('/permissions', [RoleController::class, 'getPermissions']);
+            // Get all permissions (GET) - view_permissions permission
+            Route::get('/permissions', [RoleController::class, 'getPermissions'])->middleware('permission:view_permissions');
 
-            // Create a role (POST)
-            Route::post('/', [RoleController::class, 'create']);
+            // Create a role (POST) - create_roles permission
+            Route::post('/', [RoleController::class, 'create'])->middleware('permission:create_roles');
 
-            // View a role and its permissions (GET)
-            Route::get('/{id}', [RoleController::class, 'view']);
+            // View a role and its permissions (GET) - view_roles permission
+            Route::get('/{id}', [RoleController::class, 'view'])->middleware('permission:view_roles');
 
-            // Update a role (PUT/PATCH)
-            Route::post('/update/{id}', [RoleController::class, 'update']);
+            // Get permissions for a specific role (GET) - view_roles permission
+            Route::get('/{id}/permissions', [RoleController::class, 'getRolePermissions'])->middleware('permission:view_roles');
 
-            // Delete a role (DELETE)
-            Route::delete('/{id}', [RoleController::class, 'destroy']);
+            // Update a role (PUT/PATCH) - edit_roles permission
+            Route::put('/{id}', [RoleController::class, 'update'])->middleware('permission:edit_roles');
 
-            // Assign a role to a user (POST)
-            Route::post('/assign/{userId}', [RoleController::class, 'assignRole']);
+            // Delete a role (DELETE) - delete_roles permission
+            Route::delete('/{id}', [RoleController::class, 'destroy'])->middleware('permission:delete_roles');
 
-            // Detach a role from a user (POST)
-            Route::post('/detach/{userId}', [RoleController::class, 'detachRole']);
+            // Assign a role to a user (POST) - assign_roles permission
+            Route::post('/assign/{userId}', [RoleController::class, 'assignRole'])->middleware('permission:assign_roles');
+
+            // Detach a role from a user (POST) - assign_roles permission
+            Route::post('/detach/{userId}', [RoleController::class, 'detachRole'])->middleware('permission:assign_roles');
     }   );
 
     });

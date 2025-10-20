@@ -15,6 +15,21 @@ class FinancialCategory extends Model
         'is_active'
     ];
 
+    /**
+     * Validation rules for creating/updating categories
+     */
+    public static function rules($id = null)
+    {
+        return [
+            'name' => 'required|string|max:255|unique:financial_categories,name' . ($id ? ",$id" : ''),
+            'type' => 'required|in:income,expense',
+            'description' => 'nullable|string',
+            'color' => 'nullable|string|max:7',
+            'is_system' => 'boolean',
+            'is_active' => 'boolean',
+        ];
+    }
+
     protected $casts = [
         'is_system' => 'boolean',
         'is_active' => 'boolean',

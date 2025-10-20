@@ -26,6 +26,10 @@ return new class extends Migration
             $table->timestamp('last_tested_at')->nullable();
             $table->boolean('test_passed')->default(false);
             $table->text('test_error')->nullable();
+            $table->boolean('use_tls')->default(true);
+            $table->json('configuration')->nullable();
+            $table->timestamp('tested_at')->nullable();
+            $table->text('test_result')->nullable();
             $table->timestamps();
 
             $table->index(['is_active']);

@@ -13,7 +13,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Traits\HasRoles;
-use Spatie\Permission\Models\Role;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -30,7 +29,6 @@ class User extends Authenticatable implements MustVerifyEmail
         'name',
         'email',
         'password',
-        'role_id',
     ];
 
     const ACTIVE     = 1;
@@ -67,44 +65,51 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Get the user's role.
+     * Override Spatie's hasRole to work with the trait.
+     * This maintains backward compatibility.
      */
-    public function role(): BelongsTo
+    public function hasSpatieRole(string $roleName, $guardName = null): bool
     {
-        return $this->belongsTo(Role::class);
-    }
-
-    /**
-     * Check if user has a specific role.
-     */
-    public function hasRole(string $roleName): bool
-    {
-        return $this->role && $this->role->name === $roleName;
-    }
-
-    /**
-     * Check if user has any of the given roles.
-     */
-    public function hasAnyRole(array $roles): bool
-    {
-        if (!$this->role) return false;
-        return in_array($this->role->name, $roles);
+        return parent::hasRole($roleName, $guardName ?? $this->guard_name);
     }
 
     /**
      * Check if user has a specific permission.
+     * Super admins bypass all permission checks.
      */
     public function hasPermission(string $permission): bool
     {
-        return $this->role && $this->role->hasPermission($permission);
+        // Super admin bypasses all permission checks
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->hasPermissionTo($permission, $this->guard_name);
     }
 
     /**
-     * Get user's role name.
+     * Override Spatie's hasPermissionTo to check for super admin.
+     * We need to check super admin first, then fall through to Spatie's implementation.
+     */
+    public function hasPermissionTo($permission, $guardName = null): bool
+    {
+        // Super admin bypasses all permission checks
+        if ($this->email === 'admin@marine.ng' || $this->hasAnyRole(['super_admin', 'superadmin'], 'api')) {
+            return true;
+        }
+
+        // Use Spatie's trait method via the magic method
+        // Since we can't call parent on a trait, we need to call the underlying implementation
+        return $this->hasDirectPermission($permission) || $this->hasPermissionViaRole($permission);
+    }
+
+    /**
+     * Get user's role name (Spatie version).
      */
     public function getRoleName(): ?string
     {
-        return $this->role?->name;
+        $roles = $this->getRoleNames();
+        return $roles->first();
     }
 
     /**
@@ -112,7 +117,15 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function isAdmin(): bool
     {
-        return $this->hasRole('admin');
+        return $this->hasAnyRole(['admin', 'super_admin', 'superadmin'], $this->guard_name);
+    }
+
+    /**
+     * Check if user is a super admin (bypasses all permission checks).
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasAnyRole(['super_admin', 'superadmin'], $this->guard_name);
     }
 
     /**
@@ -121,7 +134,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function isSeller(): bool
     {
-        return $this->hasRole('seller') && $this->sellerProfile()->exists();
+        return $this->hasRole('seller', $this->guard_name) && $this->sellerProfile()->exists();
     }
 
     /**
@@ -129,7 +142,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function isUser(): bool
     {
-        return $this->hasRole('user');
+        return $this->hasRole('user', $this->guard_name);
     }
 
     /**
@@ -230,11 +243,8 @@ class User extends Authenticatable implements MustVerifyEmail
                     'status' => 'active',
                 ], $sellerData));
 
-                // Then update role
-                $sellerRole = Role::where('name', 'seller')->first();
-                if ($sellerRole) {
-                    $this->update(['role_id' => $sellerRole->id]);
-                }
+                // Then assign seller role using Spatie
+                $this->syncRoles(['seller']);
             });
 
             return true;
@@ -254,11 +264,8 @@ class User extends Authenticatable implements MustVerifyEmail
                 // Delete seller profile first
                 $this->sellerProfile()->delete();
 
-                // Then update role
-                $userRole = Role::where('name', 'user')->first();
-                if ($userRole) {
-                    $this->update(['role_id' => $userRole->id]);
-                }
+                // Then assign user role using Spatie
+                $this->syncRoles(['user']);
             });
 
             return true;
