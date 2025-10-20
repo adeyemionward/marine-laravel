@@ -577,4 +577,20 @@ public function update(Request $request, $id)
             'data' => $permissions
         ], 200);
     }
+
+    public function listRoleNames()
+    {
+        try {
+            // Use a cache for this query since it's public and will be hit often.
+            // Cache for 1 hour. A more robust implementation would clear this cache when roles are updated.
+            $roleNames = cache()->remember('role_names_list', 3600, function () {
+                return Role::where('guard_name', 'api')->pluck('name');
+            });
+
+            return response()->json(['success' => true, 'data' => $roleNames]);
+        } catch (\Exception $e) {
+            Log::error('LIST_ROLE_NAMES_FAILED', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Failed to fetch role names'], 500);
+        }
+    }
 }

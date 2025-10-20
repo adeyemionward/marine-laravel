@@ -17,7 +17,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens,HasRoles;
+    use HasFactory, Notifiable, HasApiTokens, HasRoles { hasPermissionTo as spatieHasPermissionTo; }
      protected $guard_name = 'api';
 
     /**
@@ -98,9 +98,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return true;
         }
 
-        // Use Spatie's trait method via the magic method
-        // Since we can't call parent on a trait, we need to call the underlying implementation
-        return $this->hasDirectPermission($permission) || $this->hasPermissionViaRole($permission);
+        return $this->spatieHasPermissionTo($permission, $guardName);
     }
 
     /**

@@ -185,6 +185,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/user/activity', [UserController::class, 'activity']);
     Route::get('/user/dashboard', [UserController::class, 'dashboardOverview']);
 
+    // Publicly accessible role names for any authenticated user
+    Route::get('/roles/names', [RoleController::class, 'listRoleNames']);
+
     // Equipment CRUD operations
     Route::group(['prefix' => '/equipment', 'as' => 'equipment.'], function () {
     Route::post('/', [EquipmentController::class, 'store']);
