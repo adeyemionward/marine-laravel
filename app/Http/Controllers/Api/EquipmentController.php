@@ -365,12 +365,34 @@ class EquipmentController extends Controller
                 foreach ($images as $image) {
                     // Check if it's a pre-uploaded image (object/array with url)
                     if (is_array($image) && isset($image['url'])) {
-                        $imagePaths[] = $image['url'];
+                        // Save the complete image object with all metadata
+                        $imagePaths[] = [
+                            'url' => $image['url'],
+                            'thumbnail_url' => $image['thumbnail_url'] ?? $image['url'],
+                            'medium_url' => $image['medium_url'] ?? $image['url'],
+                            'large_url' => $image['large_url'] ?? $image['url'],
+                            'public_id' => $image['public_id'] ?? null,
+                            'width' => $image['width'] ?? null,
+                            'height' => $image['height'] ?? null,
+                            'size' => $image['size'] ?? null,
+                            'is_primary' => $image['is_primary'] ?? false,
+                        ];
                     }
                     // Check if it's a file upload
                     elseif ($image instanceof \Illuminate\Http\UploadedFile) {
                         $path = $image->store('listings', 'public');
-                        $imagePaths[] = Storage::url($path);
+                        $url = Storage::url($path);
+                        $imagePaths[] = [
+                            'url' => $url,
+                            'thumbnail_url' => $url,
+                            'medium_url' => $url,
+                            'large_url' => $url,
+                            'public_id' => $path,
+                            'width' => null,
+                            'height' => null,
+                            'size' => $image->getSize(),
+                            'is_primary' => false,
+                        ];
                     }
                 }
             }
