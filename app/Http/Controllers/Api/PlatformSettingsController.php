@@ -147,8 +147,8 @@ class PlatformSettingsController extends Controller
             $bankDetails = Cache::remember('platform_bank_details', 3600, function () {
                 return [
                     'bank_name' => $this->getSetting('bank_name', 'First Bank of Nigeria'),
-                    'account_number' => $this->getSetting('account_number', '3052341234'),
-                    'account_name' => $this->getSetting('account_name', 'MarineNG Limited')
+                    'account_number' => $this->getSetting('account_number', '05066826774'),
+                    'account_name' => $this->getSetting('account_name', 'Hypercom EFMS Ltd')
                 ];
             });
 

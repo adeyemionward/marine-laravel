@@ -178,6 +178,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // User profile management
     Route::get('/user/profile', [UserController::class, 'profile']);
     Route::put('/user/profile', [UserController::class, 'updateProfile']);
+    Route::post('/user/avatar', [UserController::class, 'uploadAvatar']);
     Route::get('/user/listings', [UserController::class, 'listings']);
     Route::get('/user/favorites', [UserController::class, 'favorites']);
     Route::get('/user/subscription', [UserController::class, 'subscription']);
@@ -288,6 +289,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('/invoices/{id}/mark-paid', [AdminController::class, 'markInvoiceAsPaid']);
         Route::post('/invoices/{id}/payment-proof', [AdminController::class, 'submitPaymentProof']);
         Route::get('/invoices/{id}/download', [AdminController::class, 'downloadUserInvoice']);
+        Route::delete('/invoices/{id}', [AdminController::class, 'deleteUserInvoice']);
     });
 
     // Banner Purchase Routes

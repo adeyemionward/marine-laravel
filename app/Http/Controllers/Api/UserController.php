@@ -76,6 +76,65 @@ class UserController extends Controller
         }
     }
 
+    /**
+     * Upload user avatar/profile picture
+     */
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'avatar' => 'required|image|max:5120', // 5MB max
+            ]);
+
+            $user = Auth::user();
+            $profile = $user->profile;
+
+            if (!$profile) {
+                $profile = $user->profile()->create([
+                    'user_id' => $user->id,
+                    'full_name' => $user->name,
+                ]);
+            }
+
+            // Use FileStorageService to upload avatar
+            $fileStorageService = app(\App\Services\FileStorageService::class);
+            $result = $fileStorageService->uploadImage(
+                $request->file('avatar'),
+                'profiles',
+                ['public_id' => 'avatar_' . $user->id . '_' . time()]
+            );
+
+            if ($result['success']) {
+                // Delete old avatar if exists
+                if ($profile->avatar && !str_starts_with($profile->avatar, 'http')) {
+                    $fileStorageService->deleteImage($profile->avatar);
+                }
+
+                // Update profile with new avatar URL
+                $profile->update([
+                    'avatar' => $result['data']['url']
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Avatar uploaded successfully',
+                    'data' => [
+                        'avatar_url' => $result['data']['url'],
+                        'user' => new UserResource($user->fresh('profile')),
+                    ],
+                ]);
+            } else {
+                throw new \Exception($result['error']);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload avatar',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function listings(): JsonResponse
     {
         try {

@@ -99,7 +99,7 @@ return new class extends Migration
             ],
             [
                 'key' => 'account_number',
-                'value' => '3052341234',
+                'value' => '05066826774',
                 'type' => 'string',
                 'description' => 'Bank account number',
                 'created_at' => now(),
@@ -107,7 +107,7 @@ return new class extends Migration
             ],
             [
                 'key' => 'account_name',
-                'value' => 'MarineNG Limited',
+                'value' => 'Hypercom EFMS Ltd',
                 'type' => 'string',
                 'description' => 'Bank account holder name',
                 'created_at' => now(),

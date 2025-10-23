@@ -3316,6 +3316,40 @@ class AdminController extends Controller
     }
 
     /**
+     * Delete an invoice (user can delete any of their own invoices)
+     */
+    public function deleteUserInvoice($id): JsonResponse
+    {
+        try {
+            $userId = auth()->id();
+
+            $invoice = Invoice::where('user_id', $userId)->findOrFail($id);
+
+            // Store invoice number for response message
+            $invoiceNumber = $invoice->invoice_number;
+
+            // Delete the invoice
+            $invoice->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Invoice {$invoiceNumber} has been deleted successfully",
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invoice not found or access denied',
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete invoice',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Approve or reject payment proof for an invoice (admin only)
      */
     public function approvePayment(Request $request, $id): JsonResponse
