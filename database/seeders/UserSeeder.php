@@ -6,16 +6,16 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use App\Models\UserProfile;
-use App\Models\Role; 
+use Spatie\Permission\Models\Role; 
 
 class UserSeeder extends Seeder
 {
     public function run(): void
     {
         // Get roles
-        $adminRole = Role::where('name', 'admin')->first();
-        $sellerRole = Role::where('name', 'seller')->first();
-        $userRole = Role::where('name', 'user')->first();
+        $adminRole = Role::where('name', 'admin')->where('guard_name', 'api')->first();
+        $sellerRole = Role::where('name', 'seller')->where('guard_name', 'api')->first();
+        $userRole = Role::where('name', 'user')->where('guard_name', 'api')->first();
 
         // Create admin user
         $adminUser = User::updateOrCreate(
@@ -24,10 +24,12 @@ class UserSeeder extends Seeder
                 'name' => 'System Administrator',
                 'email' => 'admin@marine.ng',
                 'password' => Hash::make('admin123'),
-                'role_id' => $adminRole->id,
                 'email_verified_at' => now(),
             ]
         );
+
+        // Assign role using Spatie's method
+        $adminUser->assignRole($adminRole);
 
         UserProfile::updateOrCreate(
             ['user_id' => $adminUser->id],
@@ -54,10 +56,12 @@ class UserSeeder extends Seeder
                 'name' => 'Test User',
                 'email' => 'user@marine.ng',
                 'password' => Hash::make('user123'),
-                'role_id' => $userRole->id,
                 'email_verified_at' => now(),
             ]
         );
+
+        // Assign role using Spatie's method
+        $testUser->assignRole($userRole);
 
         UserProfile::updateOrCreate(
             ['user_id' => $testUser->id],
@@ -118,10 +122,12 @@ class UserSeeder extends Seeder
                     'name' => $sellerData['name'],
                     'email' => $sellerData['email'],
                     'password' => Hash::make('seller123'),
-                    'role_id' => $sellerRole->id,
                     'email_verified_at' => now(),
                 ]
             );
+
+            // Assign role using Spatie's method
+            $user->assignRole($sellerRole);
 
             UserProfile::updateOrCreate(
                 ['user_id' => $user->id],
@@ -171,10 +177,12 @@ class UserSeeder extends Seeder
                     'name' => $buyerData['name'],
                     'email' => $buyerData['email'],
                     'password' => Hash::make('user123'),
-                    'role_id' => $userRole->id,
                     'email_verified_at' => now(),
                 ]
             );
+
+            // Assign role using Spatie's method
+            $user->assignRole($userRole);
 
             UserProfile::updateOrCreate(
                 ['user_id' => $user->id],
