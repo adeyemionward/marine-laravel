@@ -11,28 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('email_settings', function (Blueprint $table) {
-            $table->id();
-            $table->string('driver')->default('smtp'); // smtp, ses, mailgun, etc.
-            $table->string('host')->nullable();
-            $table->integer('port')->nullable();
-            $table->string('username')->nullable();
-            $table->string('password')->nullable();
-            $table->string('encryption')->nullable(); // tls, ssl, null
-            $table->string('from_name')->default('Marine.ng');
-            $table->string('from_email')->default('noreply@marine.ng');
-            $table->boolean('is_active')->default(false);
-            $table->json('additional_config')->nullable(); // for API keys, etc.
-            $table->timestamp('last_tested_at')->nullable();
-            $table->boolean('test_passed')->default(false);
-            $table->text('test_error')->nullable();
-            $table->boolean('use_tls')->default(true);
-            $table->json('configuration')->nullable();
-            $table->timestamp('tested_at')->nullable();
-            $table->text('test_result')->nullable();
-            $table->timestamps();
-
-            $table->index(['is_active']);
+        Schema::table('email_settings', function (Blueprint $table) {
+            // Only add columns that don't exist in the first migration
+            if (!Schema::hasColumn('email_settings', 'additional_config')) {
+                $table->json('additional_config')->nullable()->after('is_active'); // for API keys, etc.
+            }
+            if (!Schema::hasColumn('email_settings', 'last_tested_at')) {
+                $table->timestamp('last_tested_at')->nullable()->after('additional_config');
+            }
+            if (!Schema::hasColumn('email_settings', 'test_passed')) {
+                $table->boolean('test_passed')->default(false)->after('last_tested_at');
+            }
+            if (!Schema::hasColumn('email_settings', 'test_error')) {
+                $table->text('test_error')->nullable()->after('test_passed');
+            }
         });
     }
 
@@ -41,6 +33,19 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('email_settings');
+        Schema::table('email_settings', function (Blueprint $table) {
+            if (Schema::hasColumn('email_settings', 'additional_config')) {
+                $table->dropColumn('additional_config');
+            }
+            if (Schema::hasColumn('email_settings', 'last_tested_at')) {
+                $table->dropColumn('last_tested_at');
+            }
+            if (Schema::hasColumn('email_settings', 'test_passed')) {
+                $table->dropColumn('test_passed');
+            }
+            if (Schema::hasColumn('email_settings', 'test_error')) {
+                $table->dropColumn('test_error');
+            }
+        });
     }
 };
