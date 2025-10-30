@@ -522,8 +522,14 @@ if (!$listing) {
             ]);
 
             $user = $request->user();
-            $listing = EquipmentListing::where('seller_id', $user->profile->id)
-                ->findOrFail($id);
+
+            // Super admin can update any listing, others can only update their own
+            if ($user->isSuperAdmin() || $user->isAdmin()) {
+                $listing = EquipmentListing::findOrFail($id);
+            } else {
+                $listing = EquipmentListing::where('seller_id', $user->id)
+                    ->findOrFail($id);
+            }
 
             // Prepare update data
             $updateData = $request->only([
@@ -597,24 +603,36 @@ if (!$listing) {
     {
         try {
             $user = $request->user();
-            $listing = EquipmentListing::where('seller_id', $user->profile->id)
-                ->findOrFail($id);
+
+            // Super admin can delete any listing, others can only delete their own
+            if ($user->isSuperAdmin() || $user->isAdmin()) {
+                $listing = EquipmentListing::findOrFail($id);
+            } else {
+                $listing = EquipmentListing::where('seller_id', $user->id)
+                    ->findOrFail($id);
+            }
 
             // Soft delete the listing instead of hard delete
             $listing->update([
-                'status' => 'deleted',
+                'status' => 'archived',
                 'deleted_at' => now(),
             ]);
 
             // Update seller profile listing count
-            if ($user->sellerProfile) {
-                $user->sellerProfile->updateListingCount();
+            $seller = User::find($listing->seller_id);
+            if ($seller && $seller->sellerProfile) {
+                $seller->sellerProfile->updateListingCount();
             }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Listing deleted successfully',
             ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Listing not found or you do not have permission to delete it',
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -824,10 +842,15 @@ if (!$listing) {
     {
         try {
             $user = $request->user();
-            
+
             // Find the listing and verify ownership
-            $listing = EquipmentListing::where('seller_id', $user->profile->id)
-                ->findOrFail($id);
+            // Super admin can update any listing, others can only update their own
+            if ($user->isSuperAdmin() || $user->isAdmin()) {
+                $listing = EquipmentListing::findOrFail($id);
+            } else {
+                $listing = EquipmentListing::where('seller_id', $user->id)
+                    ->findOrFail($id);
+            }
 
             // Validate images
             $request->validate([
