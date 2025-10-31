@@ -229,7 +229,7 @@ class BannerService
     {
         try {
             // Get all admin users
-            $admins = User::whereHas('role', function ($query) {
+            $admins = User::whereHas('roles', function ($query) {
                 $query->where('name', 'admin');
             })->get();
 

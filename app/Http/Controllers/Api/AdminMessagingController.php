@@ -284,7 +284,7 @@ class AdminMessagingController extends Controller
 
             switch ($validated['target']) {
                 case 'sellers':
-                    $query->whereHas('role', function($q) {
+                    $query->whereHas('roles', function($q) {
                         $q->where('name', 'seller');
                     });
                     break;

@@ -31,7 +31,7 @@ class InvoiceUtilityController extends Controller
             }
 
             if ($request->has('role')) {
-                $query->whereHas('role', function($q) use ($request) {
+                $query->whereHas('roles', function($q) use ($request) {
                     $q->where('name', $request->get('role'));
                 });
             }

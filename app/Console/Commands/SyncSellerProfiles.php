@@ -104,13 +104,13 @@ class SyncSellerProfiles extends Command
         // Users with seller role but no seller profile
         $usersWithSellerRoleNoProfile = User::where('role_id', $sellerRoleId)
             ->whereDoesntHave('sellerProfile')
-            ->with('role')
+            ->with('roles')
             ->get();
 
         // Users with seller profile but not seller role
         $usersWithProfileNoSellerRole = User::where('role_id', '!=', $sellerRoleId)
             ->whereHas('sellerProfile')
-            ->with(['role', 'sellerProfile'])
+            ->with(['roles', 'sellerProfile'])
             ->get();
 
         // Orphaned profiles (profiles without users)

@@ -22,7 +22,7 @@ class CustomerSupplierController extends Controller
     public function getCustomers(Request $request): JsonResponse
     {
         try {
-            $query = User::with(['profile', 'role'])
+            $query = User::with(['profile', 'roles'])
                 ->withCount(['listings', 'invoices']);
 
             // Apply filters
@@ -122,8 +122,8 @@ class CustomerSupplierController extends Controller
     public function getSuppliers(Request $request): JsonResponse
     {
         try {
-            $query = User::with(['profile', 'role', 'sellerProfile'])
-                ->whereHas('role', function($q) {
+            $query = User::with(['profile', 'roles', 'sellerProfile'])
+                ->whereHas('roles', function($q) {
                     $q->where('name', 'seller');
                 })
                 ->orWhereHas('listings');
@@ -223,7 +223,7 @@ class CustomerSupplierController extends Controller
     public function getCustomerDetails($id): JsonResponse
     {
         try {
-            $customer = User::with(['profile', 'role', 'listings', 'invoices'])
+            $customer = User::with(['profile', 'roles', 'listings', 'invoices'])
                 ->findOrFail($id);
 
             // Get transaction history
@@ -270,7 +270,7 @@ class CustomerSupplierController extends Controller
     public function getSupplierDetails($id): JsonResponse
     {
         try {
-            $supplier = User::with(['profile', 'role', 'sellerProfile', 'listings'])
+            $supplier = User::with(['profile', 'roles', 'sellerProfile', 'listings'])
                 ->findOrFail($id);
 
             // Get listing history
@@ -352,21 +352,21 @@ class CustomerSupplierController extends Controller
                 $message = 'Customer updated successfully';
             } else {
                 // Get or create customer role
-                $customerRole = \App\Models\Role::where('name', 'customer')->first();
-                if (!$customerRole) {
-                    // Create customer role if it doesn't exist
-                    $customerRole = \App\Models\Role::create([
-                        'name' => 'customer',
-                        'display_name' => 'Customer',
-                        'description' => 'Customer role'
-                    ]);
-                }
+                // $customerRole = \Spatie\Permission\Contracts\Role::where('name', 'customer')->first();
+                // if (!$customerRole) {
+                //     // Create customer role if it doesn't exist
+                //     $customerRole = \Spatie\Permission\Contracts\Role::create([
+                //         'name' => 'customer',
+                //         'display_name' => 'Customer',
+                //         'description' => 'Customer role'
+                //     ]);
+                // }
 
                 $user = User::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
                     'password' => bcrypt('temp_password_' . uniqid()),
-                    'role_id' => $customerRole->id
+                    // 'role_id' => $customerRole->id
                 ]);
                 $message = 'Customer created successfully';
             }
@@ -462,7 +462,7 @@ class CustomerSupplierController extends Controller
     {
         try {
             $stats = [
-                'total_suppliers' => User::whereHas('role', function($q) {
+                'total_suppliers' => User::whereHas('roles', function($q) {
                         $q->where('name', 'seller');
                     })->orWhereHas('listings')->distinct()->count(),
                 'preferred_suppliers' => User::whereHas('sellerProfile', function($q) {
