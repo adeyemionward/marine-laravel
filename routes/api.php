@@ -300,8 +300,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/my-requests', [BannerPurchaseController::class, 'getUserPurchaseRequests']);
     });
 
-    // File upload management (using Laravel native storage)
-    Route::prefix('uploads')->group(function () {
+    // File upload management (using Laravel native storage) - requires authentication
+    Route::middleware('auth:sanctum')->prefix('uploads')->group(function () {
         Route::post('/signature', [FileUploadController::class, 'getUploadSignature']);
         Route::post('/image', [FileUploadController::class, 'uploadImage']);
         Route::post('/images', [FileUploadController::class, 'uploadMultipleImages']);
@@ -311,8 +311,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/urls', [FileUploadController::class, 'getMultipleUrls']);
     });
 
-    // Legacy Cloudinary routes (for backward compatibility)
-    Route::prefix('cloudinary')->group(function () {
+    // Legacy Cloudinary routes (for backward compatibility) - requires authentication
+    // These routes bypass CSRF validation since they use bearer token authentication
+    Route::middleware('auth:sanctum')->prefix('cloudinary')->group(function () {
         Route::post('/signature', [FileUploadController::class, 'getUploadSignature']);
         Route::post('/upload', [FileUploadController::class, 'uploadImage']);
         Route::post('/upload-multiple', [FileUploadController::class, 'uploadMultipleImages']);

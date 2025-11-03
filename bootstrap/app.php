@@ -13,6 +13,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Trust proxies for HTTPS detection
+        $middleware->trustProxies(at: '*');
+
+        // Exclude file upload routes from CSRF verification
+        $middleware->validateCsrfTokens(except: [
+            'api/v1/cloudinary/*',
+            'api/v1/uploads/*',
+        ]);
+
         // Add CORS middleware
         $middleware->api(prepend: [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
