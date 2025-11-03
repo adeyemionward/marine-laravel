@@ -21,6 +21,8 @@ class SellerReview extends Model
         'verified_at',
         'seller_reply',
         'seller_replied_at',
+        'helpful_count',
+        'not_helpful_count',
     ];
 
     protected $casts = [

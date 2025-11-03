@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 use App\Enums\ListingStatus;
 use App\Enums\EquipmentCondition;
+use App\Enums\ListingType;
 use App\Models\User;
 
 class EquipmentListing extends Model
@@ -18,6 +19,7 @@ class EquipmentListing extends Model
     protected $fillable = [
         'seller_id',
         'category_id',
+        'listing_type',
         'title',
         'description',
         'brand',
@@ -63,6 +65,7 @@ class EquipmentListing extends Model
     protected $casts = [
         'condition' => EquipmentCondition::class,
         'status' => ListingStatus::class,
+        'listing_type' => ListingType::class,
         'price' => 'decimal:2',
         'delivery_fee' => 'decimal:2',
         'is_price_negotiable' => 'boolean',

@@ -18,8 +18,15 @@ class SellerController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = SellerProfile::with(['user', 'userProfile'])
-                ->verified();
+            $query = SellerProfile::with(['user', 'userProfile']);
+
+            // Optional: Filter by verification status (uncomment to show only verified sellers)
+            // ->verified();
+
+            // Filter by verified status if requested
+            if ($request->boolean('verified_only')) {
+                $query->verified();
+            }
 
             // Filter by specialty
             if ($request->filled('specialty')) {
@@ -130,7 +137,6 @@ class SellerController extends Controller
             $seller = SellerProfile::with(['user', 'userProfile', 'reviews' => function ($query) {
                 $query->with('reviewer')->latest()->limit(10);
             }])
-                ->verified()
                 ->findOrFail($id);
 
             return response()->json([
@@ -152,13 +158,13 @@ class SellerController extends Controller
     public function listings($id, Request $request): JsonResponse
     {
         try {
-            $seller = SellerProfile::verified()->findOrFail($id);
+            $seller = SellerProfile::findOrFail($id);
             
             $listings = $seller->listings()
                 ->where('status', 'active')
-                ->with(['category', 'images'])
+                ->with(['category'])
                 ->when($request->filled('category'), function ($query) use ($request) {
-                    $query->where('category', $request->category);
+                    $query->where('category_id', $request->category);
                 })
                 ->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 12));
@@ -195,7 +201,7 @@ class SellerController extends Controller
     public function stats($id): JsonResponse
     {
         try {
-            $seller = SellerProfile::with('reviews')->verified()->findOrFail($id);
+            $seller = SellerProfile::with('reviews')->findOrFail($id);
             
             $stats = [
                 'overview' => [
@@ -238,7 +244,7 @@ class SellerController extends Controller
     public function reviews($id, Request $request): JsonResponse
     {
         try {
-            $seller = SellerProfile::verified()->findOrFail($id);
+            $seller = SellerProfile::findOrFail($id);
             
             $reviews = $seller->reviews()
                 ->with(['reviewer', 'listing'])

@@ -43,6 +43,28 @@ class SellerProfile extends Model
         'verified_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'location',
+        'profile_image',
+        'avatar_url',
+        'full_name',
+        'is_verified',
+        'average_rating',
+        'reviews_count',
+        'featured_service',
+        'since',
+        'starting_price',
+        'level',
+        'skills',
+        'response_rate',
+        'whatsapp',
+        'total_orders',
+        'delivery_time',
+        'languages',
+        'certifications',
+        'online_status',
+    ];
+
     // Relationships
     public function user(): BelongsTo
     {
@@ -106,7 +128,7 @@ class SellerProfile extends Model
     {
         $profile = $this->userProfile;
         if (!$profile) return 'Nigeria';
-        
+
         $location = $profile->city;
         if ($profile->state) {
             $location .= ', ' . $profile->state;
@@ -117,6 +139,127 @@ class SellerProfile extends Model
     public function getProfileImageAttribute(): ?string
     {
         return $this->userProfile?->avatar_url;
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->userProfile?->avatar_url;
+    }
+
+    public function getFullNameAttribute(): ?string
+    {
+        return $this->userProfile?->full_name;
+    }
+
+    public function getIsVerifiedAttribute(): bool
+    {
+        return $this->verification_status === 'approved';
+    }
+
+    public function getAverageRatingAttribute(): float
+    {
+        return (float) $this->rating;
+    }
+
+    public function getReviewsCountAttribute(): int
+    {
+        return (int) $this->review_count;
+    }
+
+    public function getFeaturedServiceAttribute(): ?string
+    {
+        // Return the first specialty or a generic service
+        $specialties = $this->specialties ?? [];
+        return !empty($specialties) ? "Professional " . $specialties[0] . " Services" : "Marine Equipment Services";
+    }
+
+    public function getSinceAttribute(): string
+    {
+        // Format the year when seller was verified or created
+        $date = $this->verified_at ?? $this->created_at;
+        return $date ? $date->format('Y') : date('Y');
+    }
+
+    public function getStartingPriceAttribute(): float
+    {
+        // Get the minimum price from active listings
+        $minPrice = $this->listings()
+            ->where('status', 'active')
+            ->whereNotNull('price')
+            ->where('is_poa', false)
+            ->min('price');
+
+        return $minPrice ?? 0;
+    }
+
+    public function getLevelAttribute(): ?string
+    {
+        // Determine seller level based on rating and reviews
+        if ($this->rating >= 4.8 && $this->review_count >= 50) {
+            return 'top_rated';
+        } elseif ($this->rating >= 4.5 && $this->review_count >= 20) {
+            return 'level_2';
+        }
+        return null;
+    }
+
+    public function getSkillsAttribute(): array
+    {
+        // Map specialties to skills
+        return $this->specialties ?? [];
+    }
+
+    public function getResponseRateAttribute(): int
+    {
+        // Default response rate (could be calculated from actual data)
+        return 95;
+    }
+
+    public function getWhatsappAttribute(): ?string
+    {
+        // Get WhatsApp from user profile phone
+        return $this->userProfile?->phone;
+    }
+
+    public function getTotalOrdersAttribute(): int
+    {
+        // Count completed orders (if orders table exists)
+        try {
+            return \DB::table('orders')
+                ->where('seller_id', $this->user_id)
+                ->where('status', 'completed')
+                ->count();
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    public function getDeliveryTimeAttribute(): string
+    {
+        // Default delivery time
+        return '2-3 days';
+    }
+
+    public function getLanguagesAttribute(): array
+    {
+        // Default languages
+        return ['English'];
+    }
+
+    public function getCertificationsAttribute(): array
+    {
+        // Parse from verification documents or return empty
+        return [];
+    }
+
+    public function getOnlineStatusAttribute(): bool
+    {
+        // Check if user was active recently (within last 15 minutes)
+        if ($this->user) {
+            return $this->user->last_activity_at &&
+                   $this->user->last_activity_at->diffInMinutes(now()) < 15;
+        }
+        return false;
     }
 
     // Helper Methods

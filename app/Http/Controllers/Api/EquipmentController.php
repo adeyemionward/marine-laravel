@@ -279,7 +279,8 @@ class EquipmentController extends Controller
                 'description' => 'required|string|max:2000',
                 'price' => 'nullable|numeric|min:0', // Make price optional
                 'category_id' => 'required|exists:equipment_categories,id',
-                'condition' => 'required|in:new,like_new,good,fair,poor',
+                'listing_type' => 'nullable|in:sale,lease,rent', // Add listing_type validation
+                'condition' => 'required|in:new,new_like,like_new,excellent,good,fair,poor', // Updated conditions
                 'brand' => 'nullable|string|max:100',
                 'model' => 'nullable|string|max:100',
                 'year' => 'nullable|integer|min:1900|max:' . (date('Y') + 1),
@@ -295,13 +296,17 @@ class EquipmentController extends Controller
                 'is_poa' => 'boolean',
             ]);
 
-            // Additional validation: if not POA, price is required
-            if (!$request->boolean('is_poa') && (!$request->has('price') || $request->price === null || $request->price === '')) {
+            // Additional validation: Price is required for 'sale' listings if not POA
+            // For 'lease' and 'rent' listings, price is optional (can be negotiated)
+            $listingType = $request->get('listing_type', 'sale');
+            $isPriceRequired = $listingType === 'sale' && !$request->boolean('is_poa');
+
+            if ($isPriceRequired && (!$request->has('price') || $request->price === null || $request->price === '')) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
                     'errors' => [
-                        'price' => ['The price field is required when not using Price on Application.']
+                        'price' => ['The price field is required for sale listings when not using Price on Application.']
                     ]
                 ], 422);
             }
@@ -495,7 +500,8 @@ if (!$listing) {
                 'description' => 'sometimes|required|string|max:2000',
                 'price' => 'nullable|numeric|min:0',
                 'category_id' => 'sometimes|required|exists:equipment_categories,id',
-                'condition' => 'sometimes|required|in:new,like-new,good,fair,poor',
+                'listing_type' => 'nullable|in:sale,lease,rent', // Add listing_type validation
+                'condition' => 'sometimes|required|in:new,new_like,like_new,excellent,good,fair,poor', // Updated conditions
                 'brand' => 'nullable|string|max:100',
                 'model' => 'nullable|string|max:100',
                 'year' => 'nullable|integer|min:1900|max:' . (date('Y') + 1),
@@ -942,72 +948,201 @@ if (!$listing) {
 
 
     // Get all reviews for a seller
-    public function fetchReview()
+    public function fetchReview(Request $request)
     {
-        $reviewer_id =  Auth::id();
-        $reviews = SellerReview::with(['reviewer', 'listing'])
-            ->where('reviewer_id', $reviewer_id)
-            ->latest()
-            ->get();
+        try {
+            $listingId = $request->query('listing_id');
 
-        return response()->json($reviews);
+            if (!$listingId) {
+                // If no listing_id, return current user's reviews
+                $reviewer_id = Auth::id();
+                $reviews = SellerReview::with(['reviewer', 'listing'])
+                    ->where('reviewer_id', $reviewer_id)
+                    ->latest()
+                    ->get();
+
+                return response()->json([
+                    'success' => true,
+                    'data' => $reviews
+                ]);
+            }
+
+            // Get all reviews for the listing
+            $query = SellerReview::with(['reviewer', 'listing'])
+                ->where('listing_id', $listingId);
+
+            // Apply sorting
+            $sortBy = $request->query('sort_by', 'recent');
+            switch ($sortBy) {
+                case 'helpful':
+                    $query->orderByDesc('helpful_count');
+                    break;
+                case 'rating_high':
+                    $query->orderByDesc('rating');
+                    break;
+                case 'rating_low':
+                    $query->orderBy('rating');
+                    break;
+                case 'recent':
+                default:
+                    $query->latest();
+                    break;
+            }
+
+            // Pagination
+            $perPage = $request->query('per_page', 10);
+            $page = $request->query('page', 1);
+
+            $reviews = $query->paginate($perPage);
+
+            // Calculate stats
+            $allReviews = SellerReview::where('listing_id', $listingId)->get();
+            $stats = [
+                'total_reviews' => $allReviews->count(),
+                'average_rating' => $allReviews->avg('rating') ?? 0,
+                'rating_distribution' => [
+                    '5' => $allReviews->where('rating', 5)->count(),
+                    '4' => $allReviews->where('rating', 4)->count(),
+                    '3' => $allReviews->where('rating', 3)->count(),
+                    '2' => $allReviews->where('rating', 2)->count(),
+                    '1' => $allReviews->where('rating', 1)->count(),
+                ]
+            ];
+
+            // Transform reviews to include user data properly
+            $transformedReviews = $reviews->getCollection()->map(function ($review) {
+                return [
+                    'id' => $review->id,
+                    'listing_id' => $review->listing_id,
+                    'rating' => $review->rating,
+                    'comment' => $review->review,
+                    'review' => $review->review,
+                    'user_id' => $review->reviewer_id,
+                    'user' => [
+                        'id' => $review->reviewer_id,
+                        'name' => $review->reviewer->name ?? 'Anonymous',
+                        'email' => $review->reviewer->email ?? null,
+                    ],
+                    'helpful_count' => $review->helpful_count ?? 0,
+                    'not_helpful_count' => $review->not_helpful_count ?? 0,
+                    'seller_reply' => $review->seller_reply ?? null,
+                    'seller_replied_at' => $review->seller_replied_at ?? null,
+                    'is_verified_purchase' => $review->is_verified_purchase ?? false,
+                    'created_at' => $review->created_at,
+                    'updated_at' => $review->updated_at,
+                ];
+            });
+
+            $reviews->setCollection($transformedReviews);
+
+            return response()->json([
+                'success' => true,
+                'data' => $reviews->items(),
+                'stats' => $stats,
+                'meta' => [
+                    'current_page' => $reviews->currentPage(),
+                    'last_page' => $reviews->lastPage(),
+                    'per_page' => $reviews->perPage(),
+                    'total' => $reviews->total(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch reviews: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch reviews',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
     }
 
     // Store a review
     public function addReview(Request $request)
     {
-        
-        // $validated = $request->validate([
-        //     // 'seller_id' => 'required|exists:users,id',
-        //     // 'reviewer_id' => 'required|exists:users,id',
-        //     'listing_id' => 'nullable|exists:listings,id',
-        //     'rating' => 'required|integer|min:1|max:5',
-        //     'review' => 'nullable|string',
-        //     // 'review_categories' => 'nullable|array',
-        //     // 'is_verified_purchase' => 'boolean',
-        // ]);
-        $validator = Validator::make($request->all(), [
-            'listing_id' => 'nullable|exists:equipment_listings,id',
-            'rating' => 'required|integer|min:1|max:5',
-            'review' => 'nullable|string',
-        ]);
+        try {
+            // $validated = $request->validate([
+            //     // 'seller_id' => 'required|exists:users,id',
+            //     // 'reviewer_id' => 'required|exists:users,id',
+            //     'listing_id' => 'nullable|exists:listings,id',
+            //     'rating' => 'required|integer|min:1|max:5',
+            //     'review' => 'nullable|string',
+            //     // 'review_categories' => 'nullable|array',
+            //     // 'is_verified_purchase' => 'boolean',
+            // ]);
+            $validator = Validator::make($request->all(), [
+                'listing_id' => 'nullable|exists:equipment_listings,id',
+                'rating' => 'required|integer|min:1|max:5',
+                'review' => 'nullable|string',
+            ]);
 
-        if ($validator->fails()) {
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'status'=>false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $listingID = request('listing_id');
+
+
+
+             $productDetails = EquipmentListing::where('id', $listingID)->first();
+             if(is_null($productDetails)){
+                 return response()->json([
+                        'message' => 'Item not found ',
+                        'status'=>false,
+
+                    ], 404);
+             }
+             $reviewer_id =  Auth::id();
+
+            // Check if user has already reviewed this listing
+            $existingReview = SellerReview::where('seller_id', $productDetails->seller_id)
+                ->where('reviewer_id', $reviewer_id)
+                ->where('listing_id', $listingID)
+                ->first();
+
+            if ($existingReview) {
+                return response()->json([
+                    'message' => 'You have already reviewed this listing',
+                    'status' => false,
+                ], 422);
+            }
+
+            // Prevent seller from reviewing their own listing
+            if ($productDetails->seller_id == $reviewer_id) {
+                return response()->json([
+                    'message' => 'You cannot review your own listing',
+                    'status' => false,
+                ], 422);
+            }
+
+            // if ($request->is_verified_purchase) {
+            //     $validated['verified_at'] = now();
+            // }
+
+            $review = new SellerReview();
+            $review->seller_id  = $productDetails->seller_id;
+            $review->reviewer_id = $reviewer_id;
+            $review->listing_id  = $request->input('listing_id');
+            $review->rating      = $request->input('rating');
+            $review->review      = $request->input('review');
+            $review->save();
+
             return response()->json([
-                'message' => 'Validation failed',
-                'status'=>false,
-                'errors' => $validator->errors()
-            ], 422);
+                'message' => 'Review submitted successfully',
+                'status' => true,
+                'data' => $review
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error('Failed to add review: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to submit review. Please try again.',
+                'status' => false,
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
         }
-
-        $listingID = request('listing_id');
-
-
-       
-         $productDetails = EquipmentListing::where('id', $listingID)->first();
-         if(is_null($productDetails)){
-             return response()->json([
-                    'message' => 'Item not found ',
-                    'status'=>true,
-                    
-                ], 200);
-         }
-         $reviewer_id =  Auth::id();
-         
-
-        // if ($request->is_verified_purchase) {
-        //     $validated['verified_at'] = now();
-        // }
-
-        $review = new SellerReview();
-        $review->seller_id  = $productDetails->seller_id;
-        $review->reviewer_id = $reviewer_id;
-        $review->listing_id  = $request->input('listing_id');
-        $review->rating      = $request->input('rating');
-        $review->review      = $request->input('review');
-        $review->save();
-
-        return response()->json($review, 201);
     }
 
     // // Show single review
@@ -1046,5 +1181,59 @@ if (!$listing) {
         $review->delete();
 
         return response()->json(['message' => 'Review deleted successfully']);
+    }
+
+    // Mark review as helpful
+    public function markHelpful($id)
+    {
+        try {
+            $review = SellerReview::findOrFail($id);
+
+            // Increment helpful count
+            $review->increment('helpful_count');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Thank you for your feedback',
+                'data' => [
+                    'helpful_count' => $review->helpful_count,
+                    'not_helpful_count' => $review->not_helpful_count,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to mark review as helpful: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to mark review as helpful',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    // Mark review as not helpful
+    public function markNotHelpful($id)
+    {
+        try {
+            $review = SellerReview::findOrFail($id);
+
+            // Increment not helpful count
+            $review->increment('not_helpful_count');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Thank you for your feedback',
+                'data' => [
+                    'helpful_count' => $review->helpful_count,
+                    'not_helpful_count' => $review->not_helpful_count,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to mark review as not helpful: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to mark review as not helpful',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
     }
 }
