@@ -217,7 +217,7 @@ class EmailConfigurationController extends Controller
                         ->subject('SMTP Configuration Test - Marine.ng')
                         ->from($config['from_email'], $config['from_name']);
                 });
-            } catch (\Swift_TransportException $e) {
+            } catch (\Symfony\Component\Mailer\Exception\TransportException $e) {
                 throw new \Exception('SMTP Connection Failed: ' . $e->getMessage() . '. Please check your network connection and SMTP settings.');
             } catch (\Exception $e) {
                 throw new \Exception('Email sending failed: ' . $e->getMessage());

@@ -23,8 +23,8 @@ class EmailConfigController extends Controller
     {
         $validated = $request->validate([
             'driver'      => 'required|string|in:gmail,outlook,custom',
-            'smtp_host'   => 'required|string',
-            'smtp_port'   => 'required|integer',
+            'host'   => 'required|string',
+            'port'   => 'required|integer',
             'username'    => 'required|email',
             'password'    => 'required|string',
             'from_email'  => 'required|email',
@@ -39,7 +39,16 @@ class EmailConfigController extends Controller
         // only one config allowed, so upsert
         $config = EmailConfig::updateOrCreate(
             ['driver' => $validated['driver']]
-            , $validated);
+            , [
+                'smtp_host' => $validated['host'],
+                'smtp_port' => $validated['port'],
+                'username' => $validated['username'],
+                'password' => $validated['password'],
+                'from_email' => $validated['from_email'],
+                'from_name' => $validated['from_name'],
+                'encryption' => $validated['encryption'],
+                'enable_smtp' => $validated['enable_smtp'],
+            ]);
 
         return response()->json([
             'message' => 'Email configuration saved successfully',
