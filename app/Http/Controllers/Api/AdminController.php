@@ -2365,8 +2365,11 @@ class AdminController extends Controller
                 ->orderBy('created_at', 'desc');
 
             // Apply status filter
-            if ($request->has('status') && $request->status !== 'all') {
+            if ($request->has('status') && $request->status !== 'all' && $request->status !== null) {
                 $query->where('status', $request->status);
+            } else {
+                // By default, exclude archived listings unless explicitly requested
+                $query->where('status', '!=', 'archived');
             }
 
             // Apply expiration filter
@@ -2384,7 +2387,9 @@ class AdminController extends Controller
                 }
             }
 
-            $listings = $query->paginate(20);
+            // Allow customizable pagination
+            $perPage = min(100, max(1, (int) $request->get('per_page', 24)));
+            $listings = $query->paginate($perPage);
 
             return response()->json([
                 'success' => true,
@@ -2394,6 +2399,7 @@ class AdminController extends Controller
                     'per_page' => $listings->perPage(),
                     'total' => $listings->total(),
                     'last_page' => $listings->lastPage(),
+                    'has_more' => $listings->hasMorePages(),
                 ],
             ]);
         } catch (\Exception $e) {
