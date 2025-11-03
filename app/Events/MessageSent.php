@@ -3,7 +3,7 @@
 namespace App\Events;
 
 use App\Models\Message;
-use App\Models\UserProfile;
+use App\Models\User;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
@@ -17,7 +17,7 @@ class MessageSent implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public Message $message;
-    public UserProfile $sender;
+    public User $sender;
 
     /**
      * Create a new event instance.
@@ -47,6 +47,8 @@ class MessageSent implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
+        $profile = $this->sender->profile;
+
         return [
             'message' => [
                 'id' => $this->message->id,
@@ -60,9 +62,9 @@ class MessageSent implements ShouldBroadcast
                 'offer_currency' => $this->message->offer_currency,
                 'sender' => [
                     'id' => $this->sender->id,
-                    'name' => $this->sender->full_name,
-                    'company' => $this->sender->company_name,
-                    'is_verified' => $this->sender->is_verified,
+                    'name' => $profile?->full_name ?? $this->sender->name,
+                    'company' => $profile?->company_name,
+                    'is_verified' => $profile?->is_verified ?? false,
                 ],
             ],
         ];
