@@ -549,11 +549,11 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
             });
 
             Route::group(['prefix' => '/email-configs', 'as' => 'email-configs.'], function () {
-                Route::get('/', [EmailConfigurationController::class, 'index']);
-                Route::post('/store', [EmailConfigurationController::class, 'store']);
-                Route::get('/show/{driver}', [EmailConfigurationController::class, 'show']);
-                Route::put('/update/{driver}', [EmailConfigurationController::class, 'update']);
-                Route::post('/test/{driver}', [EmailConfigurationController::class, 'test']);
+                Route::get('/', [EmailConfigController::class, 'index']);
+                Route::post('/store', [EmailConfigController::class, 'store']);
+                Route::get('/show/{driver}', [EmailConfigController::class, 'show']);
+                Route::put('/update/{driver}', [EmailConfigController::class, 'update']);
+                Route::post('/test/{driver}', [EmailConfigController::class, 'test']);
             });
         });
 
