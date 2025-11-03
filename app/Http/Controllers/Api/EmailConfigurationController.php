@@ -69,10 +69,11 @@ class EmailConfigurationController extends Controller
             }
 
             // Deactivate existing settings
-            EmailSetting::query()->update(['is_active' => false]);
+            // EmailSetting::query()->update(['is_active' => false]);
 
             // Create or update settings
-            $settings = EmailSetting::create(array_merge($data, ['is_active' => false]));
+            // $settings = EmailSetting::create(array_merge($data, ['is_active' => true]));
+            $settings = EmailSetting::updateOrCreate(['driver' => $data['driver']], array_merge($data, ['is_active' => false]));
 
             return response()->json([
                 'success' => true,
@@ -251,26 +252,26 @@ class EmailConfigurationController extends Controller
             }
 
             $errorMessage = $e->getMessage();
-            $suggestions = [];
+            // $suggestions = [];
 
-            // Provide specific suggestions based on error type
-            if (strpos($errorMessage, 'Connection could not be established') !== false) {
-                $suggestions[] = 'Check if your server can make outgoing connections on port 587';
-                $suggestions[] = 'Verify your firewall settings allow SMTP connections';
-                $suggestions[] = 'Try using port 465 with SSL instead of port 587 with TLS';
-            }
+            // // Provide specific suggestions based on error type
+            // if (strpos($errorMessage, 'Connection could not be established') !== false) {
+            //     $suggestions[] = 'Check if your server can make outgoing connections on port 587';
+            //     $suggestions[] = 'Verify your firewall settings allow SMTP connections';
+            //     $suggestions[] = 'Try using port 465 with SSL instead of port 587 with TLS';
+            // }
 
-            if (strpos($errorMessage, 'gmail.com') !== false) {
-                $suggestions[] = 'Ensure 2-Factor Authentication is enabled in your Gmail account';
-                $suggestions[] = 'Use an App Password instead of your regular Gmail password';
-                $suggestions[] = 'Check if "Less secure app access" is enabled (not recommended)';
-            }
+            // if (strpos($errorMessage, 'gmail.com') !== false) {
+            //     $suggestions[] = 'Ensure 2-Factor Authentication is enabled in your Gmail account';
+            //     $suggestions[] = 'Use an App Password instead of your regular Gmail password';
+            //     $suggestions[] = 'Check if "Less secure app access" is enabled (not recommended)';
+            // }
 
             return response()->json([
                 'success' => false,
                 'message' => 'Test email failed',
                 'error' => $errorMessage,
-                'suggestions' => $suggestions
+                // 'suggestions' => $suggestions
             ], 422);
         }
     }
@@ -386,7 +387,7 @@ class EmailConfigurationController extends Controller
                         ->subject('SMTP Configuration Test - Marine.ng')
                         ->from($config['from_email'], $config['from_name']);
                 });
-            } catch (\Swift_TransportException $e) {
+            } catch (\Symfony\Component\Mailer\Exception\TransportException $e) {
                 throw new \Exception('SMTP Connection Failed: ' . $e->getMessage() . '. Please check your network connection and SMTP settings.');
             } catch (\Exception $e) {
                 throw new \Exception('Email sending failed: ' . $e->getMessage());
@@ -413,26 +414,26 @@ class EmailConfigurationController extends Controller
             }
 
             $errorMessage = $e->getMessage();
-            $suggestions = [];
+            // $suggestions = [];
 
-            // Provide specific suggestions based on error type
-            if (strpos($errorMessage, 'Connection could not be established') !== false) {
-                $suggestions[] = 'Check if your server can make outgoing connections on port 587';
-                $suggestions[] = 'Verify your firewall settings allow SMTP connections';
-                $suggestions[] = 'Try using port 465 with SSL instead of port 587 with TLS';
-            }
+            // // Provide specific suggestions based on error type
+            // if (strpos($errorMessage, 'Connection could not be established') !== false) {
+            //     $suggestions[] = 'Check if your server can make outgoing connections on port 587';
+            //     $suggestions[] = 'Verify your firewall settings allow SMTP connections';
+            //     $suggestions[] = 'Try using port 465 with SSL instead of port 587 with TLS';
+            // }
 
-            if (strpos($errorMessage, 'gmail.com') !== false) {
-                $suggestions[] = 'Ensure 2-Factor Authentication is enabled in your Gmail account';
-                $suggestions[] = 'Use an App Password instead of your regular Gmail password';
-                $suggestions[] = 'Check if "Less secure app access" is enabled (not recommended)';
-            }
+            // if (strpos($errorMessage, 'gmail.com') !== false) {
+            //     $suggestions[] = 'Ensure 2-Factor Authentication is enabled in your Gmail account';
+            //     $suggestions[] = 'Use an App Password instead of your regular Gmail password';
+            //     $suggestions[] = 'Check if "Less secure app access" is enabled (not recommended)';
+            // }
 
             return response()->json([
                 'success' => false,
                 'message' => 'Test email failed',
                 'error' => $errorMessage,
-                'suggestions' => $suggestions
+                // 'suggestions' => $suggestions
             ], 422);
         }
     }
