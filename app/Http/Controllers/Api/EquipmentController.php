@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\EquipmentListing;
+use App\Models\User;
 use App\Models\UserFavorite;
 use App\Models\SellerReview;
 use App\Http\Resources\EquipmentListingResource;
