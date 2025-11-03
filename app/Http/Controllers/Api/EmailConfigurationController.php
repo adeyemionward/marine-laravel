@@ -34,8 +34,8 @@ class EmailConfigurationController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'driver' => 'required|in:smtp,gmail,outlook,custom',
-                'host' => 'required_if:driver,smtp,custom|string',
-                'port' => 'required_if:driver,smtp,custom|integer|min:1|max:65535',
+                'smtp_host' => 'required_if:driver,smtp,custom|string',
+                'smtp_port' => 'required_if:driver,smtp,custom|integer|min:1|max:65535',
                 'username' => 'required|string',
                 'password' => 'required|string',
                 'encryption' => 'required|in:tls,ssl,null',
@@ -63,6 +63,9 @@ class EmailConfigurationController extends Controller
                 $data['host'] = 'smtp-mail.outlook.com';
                 $data['port'] = 587;
                 $data['encryption'] = 'tls';
+            } else {
+                $data['host'] = $data['smtp_host'];
+                $data['port'] = $data['smtp_port'];
             }
 
             // Deactivate existing settings
