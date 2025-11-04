@@ -61,10 +61,10 @@ class AuthController extends Controller
 
             // Send email verification notification
             // $user->notify(new \App\Notifications\EmailVerificationNotification());
-             Mail::to($user->email)->send(new NewUserNotification($user));
+            //  Mail::to($user->email)->send(new NewUserNotification($user));
 
             // // Send notification to admin
-             Mail::to('adeyemiadeshina6@gmail.com')->send(new NewUserAdminNotification($user));
+            //  Mail::to('adeyemiadeshina6@gmail.com')->send(new NewUserAdminNotification($user));
 
 
             return response()->json([
