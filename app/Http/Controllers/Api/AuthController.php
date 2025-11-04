@@ -27,7 +27,7 @@ class AuthController extends Controller
      */
     public function register(RegisterRequest $request): JsonResponse
     {
-        // try {
+        try {
             DB::beginTransaction();
 
             // Create user
@@ -77,15 +77,15 @@ class AuthController extends Controller
                 ],
             ], 201);
 
-        // } catch (\Exception $e) {
-        //     DB::rollBack();
+        } catch (\Exception $e) {
+            DB::rollBack();
 
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'Registration failed',
-        //         'error' => $e->getMessage(),
-        //     ], 400);
-        // }
+            return response()->json([
+                'success' => false,
+                'message' => 'Registration failed',
+                'error' => $e->getMessage(),
+            ], 400);
+        }
     }
 
     /**
