@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Resources\UserResource;
+use App\Mail\NewUserAdminNotification;
+use App\Mail\NewUserNotification;
 use App\Models\User;
 use App\Models\UserProfile;
 use Illuminate\Http\Request;
@@ -16,6 +18,7 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Mail;
 
 class AuthController extends Controller
 {
@@ -36,7 +39,7 @@ class AuthController extends Controller
             ]);
 
             // Assign default 'user' role using Spatie
-            $user->assignRole('user');
+          //  $user->assignRole('user');
 
             // Create user profile
             $profile = UserProfile::create([
@@ -57,7 +60,12 @@ class AuthController extends Controller
             DB::commit();
 
             // Send email verification notification
-            $user->notify(new \App\Notifications\EmailVerificationNotification());
+            // $user->notify(new \App\Notifications\EmailVerificationNotification());
+            Mail::to($user->email)->send(new NewUserNotification($user));
+
+            // Send notification to admin
+            Mail::to('adeyemiadeshina6@gmail.com')->send(new NewUserAdminNotification($user));
+
 
             return response()->json([
                 'success' => true,
@@ -71,7 +79,7 @@ class AuthController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Registration failed',
@@ -139,7 +147,7 @@ class AuthController extends Controller
         try {
             // Get the authenticated user
             $user = $request->user();
-            
+
             // Check if user is authenticated
             if (!$user) {
                 return response()->json([
@@ -150,7 +158,7 @@ class AuthController extends Controller
 
             // Get current token
             $currentToken = $user->currentAccessToken();
-            
+
             // Delete current token if it exists
             if ($currentToken) {
                 $currentToken->delete();
@@ -164,7 +172,7 @@ class AuthController extends Controller
         } catch (\Exception $e) {
             // Log the error for debugging
             \Log::error('Logout error: ' . $e->getMessage());
-            
+
             // Still return success since the client should clear local data anyway
             return response()->json([
                 'success' => true,
