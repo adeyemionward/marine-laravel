@@ -27,7 +27,7 @@ class AuthController extends Controller
      */
     public function register(RegisterRequest $request): JsonResponse
     {
-        try {
+        // try {
             DB::beginTransaction();
 
             // Create user
@@ -61,10 +61,10 @@ class AuthController extends Controller
 
             // Send email verification notification
             // $user->notify(new \App\Notifications\EmailVerificationNotification());
-            Mail::to($user->email)->send(new NewUserNotification($user));
+             Mail::to($user->email)->send(new NewUserNotification($user));
 
-            // Send notification to admin
-            Mail::to('adeyemiadeshina6@gmail.com')->send(new NewUserAdminNotification($user));
+            // // Send notification to admin
+             Mail::to('adeyemiadeshina6@gmail.com')->send(new NewUserAdminNotification($user));
 
 
             return response()->json([
@@ -77,15 +77,15 @@ class AuthController extends Controller
                 ],
             ], 201);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
+        // } catch (\Exception $e) {
+        //     DB::rollBack();
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Registration failed',
-                'error' => $e->getMessage(),
-            ], 400);
-        }
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'Registration failed',
+        //         'error' => $e->getMessage(),
+        //     ], 400);
+        // }
     }
 
     /**
