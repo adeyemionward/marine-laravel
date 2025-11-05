@@ -64,7 +64,7 @@ class AuthController extends Controller
               Mail::to($user->email)->send(new NewUserNotification($user));
 
             // // Send notification to admin
-              Mail::to('adeyemiadeshina6@gmail.com')->send(new NewUserAdminNotification($user));
+              Mail::to('info@marine.ng')->send(new NewUserAdminNotification($user));
 
 
             return response()->json([

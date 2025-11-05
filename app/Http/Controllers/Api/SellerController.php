@@ -3,13 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\NewSellerApplicationAdmin;
+use App\Mail\SellerApplicationSubmitted;
 use App\Models\SellerProfile;
 use App\Models\SellerApplication;
 use App\Models\SellerReview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Support\Facades\Mail;
 class SellerController extends Controller
 {
     /**
@@ -92,7 +94,7 @@ class SellerController extends Controller
     {
         try {
             $limit = min(12, max(1, (int) $request->get('limit', 8)));
-            
+
             $sellers = SellerProfile::with(['user', 'userProfile'])
                 ->verified()
                 ->featured()
@@ -159,7 +161,7 @@ class SellerController extends Controller
     {
         try {
             $seller = SellerProfile::findOrFail($id);
-            
+
             $listings = $seller->listings()
                 ->where('status', 'active')
                 ->with(['category'])
@@ -202,7 +204,7 @@ class SellerController extends Controller
     {
         try {
             $seller = SellerProfile::with('reviews')->findOrFail($id);
-            
+
             $stats = [
                 'overview' => [
                     'rating' => $seller->rating,
@@ -245,7 +247,7 @@ class SellerController extends Controller
     {
         try {
             $seller = SellerProfile::findOrFail($id);
-            
+
             $reviews = $seller->reviews()
                 ->with(['reviewer', 'listing'])
                 ->when($request->filled('rating'), function ($query) use ($request) {
@@ -332,6 +334,12 @@ class SellerController extends Controller
                 'motivation' => $request->motivation,
             ]);
 
+            // Send email to user (seller applicant)
+            Mail::to($user->email)->send(new SellerApplicationSubmitted($application));
+
+            // Send email to admin
+            Mail::to('info@marine.ng')->send(new NewSellerApplicationAdmin($application));
+
             return response()->json([
                 'success' => true,
                 'message' => 'Seller application submitted successfully',
@@ -353,7 +361,7 @@ class SellerController extends Controller
     {
         try {
             $user = $request->user();
-            
+
             $application = SellerApplication::where('user_id', $user->id)
                 ->latest()
                 ->first();
@@ -427,10 +435,10 @@ class SellerController extends Controller
     {
         try {
             $user = $request->user();
-            
+
             // Check if user has a seller profile
             $sellerProfile = SellerProfile::where('user_id', $user->id)->first();
-            
+
             if (!$sellerProfile) {
                 // User is not a seller yet, return application status
                 $application = SellerApplication::where('user_id', $user->id)
@@ -454,43 +462,43 @@ class SellerController extends Controller
             // Get comprehensive dashboard data
             $currentMonth = now()->startOfMonth();
             $lastMonth = now()->subMonth()->startOfMonth();
-            
+
             // Get listings statistics
             $activeListings = $sellerProfile->listings()
                 ->where('status', 'active')
                 ->count();
-            
+
             $pendingListings = $sellerProfile->listings()
                 ->where('status', 'pending')
                 ->count();
-            
+
             $soldListings = $sellerProfile->listings()
                 ->where('status', 'sold')
                 ->count();
-            
+
             // Get recent listings
             $recentListings = $sellerProfile->listings()
                 ->with(['category', 'images'])
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get();
-            
+
             // Get views and inquiries
             $totalViews = $sellerProfile->listings()
                 ->sum('views');
-            
+
             $monthlyViews = $sellerProfile->listings()
                 ->join('equipment_views', 'equipment.id', '=', 'equipment_views.equipment_id')
                 ->where('equipment_views.created_at', '>=', $currentMonth)
                 ->count();
-            
+
             // Get recent reviews
             $recentReviews = $sellerProfile->reviews()
                 ->with(['reviewer', 'listing'])
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get();
-            
+
             // Get messages/inquiries count
             $unreadMessages = DB::table('conversations')
                 ->join('messages', 'conversations.id', '=', 'messages.conversation_id')
@@ -498,20 +506,20 @@ class SellerController extends Controller
                 ->where('messages.is_read', false)
                 ->where('messages.sender_id', '!=', $user->id)
                 ->count();
-            
+
             // Calculate growth metrics
             $currentMonthListings = $sellerProfile->listings()
                 ->where('created_at', '>=', $currentMonth)
                 ->count();
-            
+
             $lastMonthListings = $sellerProfile->listings()
                 ->whereBetween('created_at', [$lastMonth, $currentMonth])
                 ->count();
-            
-            $listingsGrowth = $lastMonthListings > 0 
-                ? (($currentMonthListings - $lastMonthListings) / $lastMonthListings) * 100 
+
+            $listingsGrowth = $lastMonthListings > 0
+                ? (($currentMonthListings - $lastMonthListings) / $lastMonthListings) * 100
                 : 0;
-            
+
             // Get performance metrics
             $avgResponseTime = DB::table('conversations')
                 ->join('messages', 'conversations.id', '=', 'messages.conversation_id')
@@ -519,7 +527,7 @@ class SellerController extends Controller
                 ->where('messages.sender_id', $user->id)
                 ->whereNotNull('messages.response_time_minutes')
                 ->avg('messages.response_time_minutes');
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [
