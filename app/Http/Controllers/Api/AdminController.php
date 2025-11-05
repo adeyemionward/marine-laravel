@@ -16,10 +16,15 @@ use App\Models\BannerPurchaseRequest;
 use App\Models\FinancialTransaction;
 use App\Http\Resources\EquipmentListingResource;
 use App\Http\Resources\UserResource;
+use App\Mail\AdminSellerApprovedMail;
+use App\Mail\NewUserNotification;
+use App\Mail\SellerApprovedMail;
+use App\Mail\SellerRejectedMail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Mail;
 class AdminController extends Controller
 {
     public function listings(): JsonResponse
@@ -823,6 +828,14 @@ class AdminController extends Controller
             $application = SellerApplication::findOrFail($validated['application_id']);
             $application->approve(auth()->user(), $validated['admin_notes'] ?? null);
 
+
+                        // ✅ Send seller email
+            Mail::to($application->user->email)->send( new SellerApprovedMail($application));
+
+
+            // ✅ Send admin email
+            Mail::to('adeyemiadeshina6@gmail.com')->send(  new AdminSellerApprovedMail($application, $validated['admin_notes'] ?? null));
+
             $response = [
                 'success' => true,
                 'message' => 'Seller application approved successfully',
@@ -1073,6 +1086,11 @@ class AdminController extends Controller
 
             $application = SellerApplication::findOrFail($id);
             $application->reject(auth()->user(), $validated['reason']);
+
+            // ✅ Send rejection email to seller
+            Mail::to('adeyemiadeshina6@gmail.com')->send(
+                new SellerRejectedMail($application, $validated['reason'])
+            );
 
             return response()->json([
                 'success' => true,
