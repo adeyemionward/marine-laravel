@@ -834,7 +834,7 @@ class AdminController extends Controller
 
 
             // ✅ Send admin email
-            Mail::to('adeyemiadeshina6@gmail.com')->send(  new AdminSellerApprovedMail($application, $validated['admin_notes'] ?? null));
+            Mail::to('info@marine.ng')->send(  new AdminSellerApprovedMail($application, $validated['admin_notes'] ?? null));
 
             $response = [
                 'success' => true,
