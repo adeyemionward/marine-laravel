@@ -817,7 +817,7 @@ class AdminController extends Controller
                 'application_id' => 'required|exists:seller_applications,id',
                 'plan_id' => 'nullable|integer|exists:subscription_plans,id',
                 'admin_notes' => 'nullable|string',
-                'verification_level' => 'nullable|string|in:basic,freemium,premium,enterprise',
+                'verification_level' => 'nullable|string|in:basic,premium,enterprise',
                 'welcome_message' => 'nullable|boolean',
                 'send_email' => 'nullable|boolean',
                 'grant_immediate_access' => 'nullable|boolean',
@@ -1088,7 +1088,7 @@ class AdminController extends Controller
             $application->reject(auth()->user(), $validated['reason']);
 
             // ✅ Send rejection email to seller
-            Mail::to('adeyemiadeshina6@gmail.com')->send(
+            Mail::to($application->user->email)->send(
                 new SellerRejectedMail($application, $validated['reason'])
             );
 
