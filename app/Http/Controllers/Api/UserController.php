@@ -62,7 +62,20 @@ class UserController extends Controller
                 'city' => 'sometimes|nullable|string|max:100',
                 'state' => 'sometimes|nullable|string|max:100',
                 'country' => 'sometimes|nullable|string|max:100',
+                'nin' => 'sometimes|nullable|string|max:50',
+                'business_phone' => 'sometimes|nullable|string|max:20',
+                'business_address' => 'sometimes|nullable|string|max:500',
+                'business_registration_number' => 'sometimes|nullable|string|max:100',
+                'tax_id' => 'sometimes|nullable|string|max:100',
+                'is_business_account' => 'sometimes|boolean',
+                'business_type' => 'sometimes|nullable|string|in:sole_proprietorship,partnership,limited_liability_company,corporation,cooperative,other',
             ]);
+
+            // Map business_registration_number to business_registration for database compatibility
+            if (isset($validated['business_registration_number'])) {
+                $validated['business_registration'] = $validated['business_registration_number'];
+                unset($validated['business_registration_number']);
+            }
 
             if ($profile) {
                 $profile->update($validated);
@@ -146,6 +159,227 @@ class UserController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to change password',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate 2FA secret and QR code
+     */
+    public function generate2FASecret(): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $profile = $user->profile;
+
+            if (!$profile) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profile not found',
+                ], 404);
+            }
+
+            $google2fa = app(\PragmaRX\Google2FA\Google2FA::class);
+            $secret = $google2fa->generateSecretKey();
+
+            // Generate QR code URL
+            $qrCodeUrl = $google2fa->getQRCodeUrl(
+                config('app.name'),
+                $user->email,
+                $secret
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'secret' => $secret,
+                    'qr_code' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($qrCodeUrl),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('2FA secret generation error', [
+                'user_id' => Auth::id(),
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate 2FA secret',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Enable 2FA after verification
+     */
+    public function enable2FA(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'code' => 'required|string|size:6',
+                'secret' => 'required|string',
+            ]);
+
+            $user = Auth::user();
+            $profile = $user->profile;
+
+            if (!$profile) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profile not found',
+                ], 404);
+            }
+
+            $google2fa = app(\PragmaRX\Google2FA\Google2FA::class);
+
+            // Verify the code
+            $valid = $google2fa->verifyKey($validated['secret'], $validated['code']);
+
+            if (!$valid) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid verification code',
+                ], 422);
+            }
+
+            // Generate backup codes
+            $backupCodes = [];
+            for ($i = 0; $i < 8; $i++) {
+                $backupCodes[] = strtoupper(substr(md5(random_bytes(16)), 0, 8));
+            }
+
+            // Enable 2FA
+            $profile->update([
+                'two_factor_secret' => encrypt($validated['secret']),
+                'two_factor_enabled' => true,
+                'two_factor_backup_codes' => array_map(function($code) {
+                    return \Hash::make($code);
+                }, $backupCodes),
+            ]);
+
+            Log::info('2FA enabled successfully', ['user_id' => $user->id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => '2FA enabled successfully',
+                'data' => [
+                    'backup_codes' => $backupCodes, // Return plain text codes to user
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('2FA enable error', [
+                'user_id' => Auth::id(),
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to enable 2FA',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Disable 2FA
+     */
+    public function disable2FA(): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $profile = $user->profile;
+
+            if (!$profile) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profile not found',
+                ], 404);
+            }
+
+            $profile->update([
+                'two_factor_secret' => null,
+                'two_factor_enabled' => false,
+                'two_factor_backup_codes' => null,
+            ]);
+
+            Log::info('2FA disabled successfully', ['user_id' => $user->id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => '2FA disabled successfully',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('2FA disable error', [
+                'user_id' => Auth::id(),
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to disable 2FA',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Verify 2FA code during login
+     */
+    public function verify2FACode(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'code' => 'required|string',
+            ]);
+
+            $user = Auth::user();
+            $profile = $user->profile;
+
+            if (!$profile || !$profile->two_factor_enabled) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '2FA is not enabled',
+                ], 400);
+            }
+
+            $google2fa = app(\PragmaRX\Google2FA\Google2FA::class);
+            $secret = decrypt($profile->two_factor_secret);
+
+            // First try to verify with authenticator code
+            $valid = $google2fa->verifyKey($secret, $validated['code']);
+
+            // If not valid, check backup codes
+            if (!$valid && $profile->two_factor_backup_codes) {
+                foreach ($profile->two_factor_backup_codes as $index => $hashedCode) {
+                    if (\Hash::check($validated['code'], $hashedCode)) {
+                        $valid = true;
+                        // Remove used backup code
+                        $backupCodes = $profile->two_factor_backup_codes;
+                        unset($backupCodes[$index]);
+                        $profile->update(['two_factor_backup_codes' => array_values($backupCodes)]);
+                        break;
+                    }
+                }
+            }
+
+            if (!$valid) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid verification code',
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => '2FA verification successful',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('2FA verification error', [
+                'user_id' => Auth::id(),
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Verification failed',
                 'error' => $e->getMessage(),
             ], 500);
         }

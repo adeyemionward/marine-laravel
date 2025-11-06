@@ -32,13 +32,18 @@ class UserProfile extends Model
         'verification_documents',
         'is_verified',
         'email_verified_at',
+        'two_factor_secret',
+        'two_factor_enabled',
+        'two_factor_backup_codes',
     ];
 
     protected $casts = [
         'role' => UserRole::class,
         'is_active' => 'boolean',
         'is_verified' => 'boolean',
+        'two_factor_enabled' => 'boolean',
         'verification_documents' => 'array',
+        'two_factor_backup_codes' => 'array',
         'email_verified_at' => 'datetime',
     ];
 

@@ -180,6 +180,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/user/profile', [UserController::class, 'updateProfile']);
     Route::post('/user/avatar', [UserController::class, 'uploadAvatar']);
     Route::post('/user/change-password', [UserController::class, 'changePassword']);
+
+    // Two-Factor Authentication
+    Route::post('/user/2fa/generate', [UserController::class, 'generate2FASecret']);
+    Route::post('/user/2fa/enable', [UserController::class, 'enable2FA']);
+    Route::post('/user/2fa/disable', [UserController::class, 'disable2FA']);
+    Route::post('/user/2fa/verify', [UserController::class, 'verify2FACode']);
+
     Route::get('/user/listings', [UserController::class, 'listings']);
     Route::get('/user/favorites', [UserController::class, 'favorites']);
     Route::get('/user/subscription', [UserController::class, 'subscription']);
