@@ -44,15 +44,24 @@ class UserController extends Controller
             $user = Auth::user();
             $profile = $user->profile;
 
+            // Log incoming request for debugging
+            Log::info('Profile update request', [
+                'user_id' => $user->id,
+                'request_data' => $request->all()
+            ]);
+
             $validated = $request->validate([
                 'full_name' => 'sometimes|string|max:255',
-                'company_name' => 'sometimes|string|max:255',
-                'company_description' => 'sometimes|string|max:1000',
-                'phone' => 'sometimes|string|max:20',
-                'address' => 'sometimes|string|max:500',
-                'city' => 'sometimes|string|max:100',
-                'state' => 'sometimes|string|max:100',
-                'country' => 'sometimes|string|max:100',
+                'company_name' => 'sometimes|nullable|string|max:255',
+                'company_description' => 'sometimes|nullable|string|max:1000',
+                'bio' => 'sometimes|nullable|string|max:1000',
+                'website' => 'sometimes|nullable|string|max:255',
+                'linkedin' => 'sometimes|nullable|string|max:255',
+                'phone' => 'sometimes|nullable|string|max:20',
+                'address' => 'sometimes|nullable|string|max:500',
+                'city' => 'sometimes|nullable|string|max:100',
+                'state' => 'sometimes|nullable|string|max:100',
+                'country' => 'sometimes|nullable|string|max:100',
             ]);
 
             if ($profile) {
@@ -67,10 +76,76 @@ class UserController extends Controller
                 'message' => 'Profile updated successfully',
                 'data' => new UserResource($user->fresh('profile')),
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Profile update validation error', [
+                'user_id' => $user->id ?? null,
+                'errors' => $e->errors()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
+            Log::error('Profile update error', [
+                'user_id' => $user->id ?? null,
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update profile',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Change user password
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+
+            $validated = $request->validate([
+                'current_password' => 'required|string',
+                'new_password' => 'required|string|min:8',
+                'new_password_confirmation' => 'required|string|same:new_password',
+            ]);
+
+            // Verify current password
+            if (!\Hash::check($validated['current_password'], $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Current password is incorrect',
+                ], 422);
+            }
+
+            // Update password
+            $user->password = \Hash::make($validated['new_password']);
+            $user->save();
+
+            Log::info('Password changed successfully', ['user_id' => $user->id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password updated successfully',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Password change error', [
+                'user_id' => Auth::id(),
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to change password',
                 'error' => $e->getMessage(),
             ], 500);
         }
