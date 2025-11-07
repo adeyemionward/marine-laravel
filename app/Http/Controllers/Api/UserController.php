@@ -65,17 +65,13 @@ class UserController extends Controller
                 'nin' => 'sometimes|nullable|string|max:50',
                 'business_phone' => 'sometimes|nullable|string|max:20',
                 'business_address' => 'sometimes|nullable|string|max:500',
-                'business_registration_number' => 'sometimes|nullable|string|max:100',
+                'business_registration' => 'sometimes|nullable|string|max:100',
                 'tax_id' => 'sometimes|nullable|string|max:100',
                 'is_business_account' => 'sometimes|boolean',
                 'business_type' => 'sometimes|nullable|string|in:sole_proprietorship,partnership,limited_liability_company,corporation,cooperative,other',
             ]);
 
-            // Map business_registration_number to business_registration for database compatibility
-            if (isset($validated['business_registration_number'])) {
-                $validated['business_registration'] = $validated['business_registration_number'];
-                unset($validated['business_registration_number']);
-            }
+
 
             if ($profile) {
                 $profile->update($validated);
@@ -180,11 +176,11 @@ class UserController extends Controller
                 ], 404);
             }
 
-            $google2fa = app(\PragmaRX\Google2FA\Google2FA::class);
-            $secret = $google2fa->generateSecretKey();
+            $twoFactorService = new \App\Services\TwoFactorAuthService();
+            $secret = $twoFactorService->generateSecretKey();
 
             // Generate QR code URL
-            $qrCodeUrl = $google2fa->getQRCodeUrl(
+            $qrCodeUrl = $twoFactorService->getQRCodeUrl(
                 config('app.name'),
                 $user->email,
                 $secret
@@ -194,7 +190,7 @@ class UserController extends Controller
                 'success' => true,
                 'data' => [
                     'secret' => $secret,
-                    'qr_code' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($qrCodeUrl),
+                    'qr_code' => $qrCodeUrl,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -231,10 +227,10 @@ class UserController extends Controller
                 ], 404);
             }
 
-            $google2fa = app(\PragmaRX\Google2FA\Google2FA::class);
+            $twoFactorService = new \App\Services\TwoFactorAuthService();
 
             // Verify the code
-            $valid = $google2fa->verifyKey($validated['secret'], $validated['code']);
+            $valid = $twoFactorService->verifyKey($validated['secret'], $validated['code']);
 
             if (!$valid) {
                 return response()->json([
@@ -341,11 +337,11 @@ class UserController extends Controller
                 ], 400);
             }
 
-            $google2fa = app(\PragmaRX\Google2FA\Google2FA::class);
+            $twoFactorService = new \App\Services\TwoFactorAuthService();
             $secret = decrypt($profile->two_factor_secret);
 
             // First try to verify with authenticator code
-            $valid = $google2fa->verifyKey($secret, $validated['code']);
+            $valid = $twoFactorService->verifyKey($secret, $validated['code']);
 
             // If not valid, check backup codes
             if (!$valid && $profile->two_factor_backup_codes) {

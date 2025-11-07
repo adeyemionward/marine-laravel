@@ -35,6 +35,13 @@ class UserProfile extends Model
         'two_factor_secret',
         'two_factor_enabled',
         'two_factor_backup_codes',
+        'nin',
+        'business_phone',
+        'business_address',
+        'business_registration',
+        'tax_id',
+        'is_business_account',
+        'business_type',
     ];
 
     protected $casts = [

@@ -26,9 +26,9 @@ class SellerController extends Controller
             // ->verified();
 
             // Filter by verified status if requested
-            if ($request->boolean('verified_only')) {
-                $query->verified();
-            }
+            // if ($request->boolean('verified_only')) {
+            //     $query->verified();
+            // }
 
             // Filter by specialty
             if ($request->filled('specialty')) {
