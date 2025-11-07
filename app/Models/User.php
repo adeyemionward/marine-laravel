@@ -234,7 +234,7 @@ class User extends Authenticatable implements MustVerifyEmail
         try {
             DB::transaction(function () use ($sellerData) {
                 // Create seller profile first
-                $this->sellerProfile()->create(array_merge([
+                $this->sellerProfile()->updateOrCreate([], array_merge([
                     'business_name' => $this->name,
                     'business_type' => 'Individual',
                     'verification_status' => 'pending',

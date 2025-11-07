@@ -48,13 +48,19 @@ class TwoFactorAuthService
     /**
      * Get the current TOTP code
      */
-    protected function getCode(string $secret, int $timestamp): string
+    public function getCode(string $secret, int $timestamp): string
     {
         $key = $this->base32Decode($secret);
-        $time = pack('N*', 0) . pack('N*', $timestamp);
+
+        // Pack timestamp as 64-bit big-endian integer
+        $time = pack('J', $timestamp);
+
+        // Generate HMAC-SHA1 hash
         $hash = hash_hmac('sha1', $time, $key, true);
 
-        $offset = ord($hash[strlen($hash) - 1]) & 0xf;
+        // Dynamic truncation as per RFC 4226
+        $offset = ord($hash[19]) & 0xf;
+
         $truncated = (
             ((ord($hash[$offset]) & 0x7f) << 24) |
             ((ord($hash[$offset + 1]) & 0xff) << 16) |
@@ -66,13 +72,18 @@ class TwoFactorAuthService
     }
 
     /**
-     * Decode Base32 string
+     * Decode Base32 string (RFC 4648)
      */
     protected function base32Decode(string $secret): string
     {
+        if (empty($secret)) {
+            return '';
+        }
+
         $base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
         $base32charsFlipped = array_flip(str_split($base32chars));
 
+        $secret = strtoupper($secret);
         $paddingCharCount = substr_count($secret, '=');
         $allowedValues = [6, 4, 3, 1, 0];
 
@@ -80,33 +91,36 @@ class TwoFactorAuthService
             return '';
         }
 
-        for ($i = 0; $i < 4; $i++) {
-            if ($paddingCharCount == $allowedValues[$i] &&
-                substr($secret, -($allowedValues[$i])) != str_repeat('=', $allowedValues[$i])) {
-                return '';
-            }
-        }
-
+        // Remove padding
         $secret = str_replace('=', '', $secret);
         $secret = str_split($secret);
         $binaryString = '';
 
+        // Process in chunks of 8 characters
         for ($i = 0; $i < count($secret); $i = $i + 8) {
             $x = '';
-            if (!in_array($secret[$i], $base32charsFlipped)) {
-                return '';
-            }
 
+            // Convert 8 base32 chars to 40 bits
             for ($j = 0; $j < 8; $j++) {
-                if (isset($secret[$i + $j])) {
-                    $x .= str_pad(base_convert($base32charsFlipped[$secret[$i + $j]], 10, 2), 5, '0', STR_PAD_LEFT);
+                if (!isset($secret[$i + $j])) {
+                    continue;
                 }
+
+                $char = $secret[$i + $j];
+                if (!isset($base32charsFlipped[$char])) {
+                    return '';
+                }
+
+                $x .= str_pad(decbin($base32charsFlipped[$char]), 5, '0', STR_PAD_LEFT);
             }
 
+            // Convert 40 bits to 5 bytes
             $eightBits = str_split($x, 8);
 
-            for ($z = 0; $z < count($eightBits); $z++) {
-                $binaryString .= (($y = chr(base_convert($eightBits[$z], 2, 10))) || ord($y) == 48) ? $y : '';
+            foreach ($eightBits as $bits) {
+                if (strlen($bits) === 8) {
+                    $binaryString .= chr(bindec($bits));
+                }
             }
         }
 

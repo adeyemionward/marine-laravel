@@ -217,6 +217,10 @@ class UserController extends Controller
                 'secret' => 'required|string',
             ]);
 
+            // Trim and clean the inputs
+            $code = trim($validated['code']);
+            $secret = trim(strtoupper($validated['secret'])); // TOTP secrets should be uppercase
+
             $user = Auth::user();
             $profile = $user->profile;
 
@@ -229,13 +233,31 @@ class UserController extends Controller
 
             $twoFactorService = new \App\Services\TwoFactorAuthService();
 
-            // Verify the code
-            $valid = $twoFactorService->verifyKey($validated['secret'], $validated['code']);
+            // Get expected codes for debugging
+            $timestamp = floor(time() / 30);
+            $expectedCodes = [];
+            for ($i = -2; $i <= 2; $i++) {
+                $expectedCodes["T{$i}"] = $twoFactorService->getCode($secret, $timestamp + $i);
+            }
+
+            // Verify the code with larger time window for better compatibility
+            $valid = $twoFactorService->verifyKey($secret, $code, 2);
+
+            Log::info('2FA verification attempt', [
+                'user_id' => $user->id,
+                'submitted_code' => $code,
+                'code_length' => strlen($code),
+                'secret_length' => strlen($secret),
+                'expected_codes' => $expectedCodes,
+                'valid' => $valid,
+                'timestamp' => time(),
+                'current_timestamp_window' => $timestamp,
+            ]);
 
             if (!$valid) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid verification code',
+                    'message' => 'Invalid verification code. Please try the next code from your authenticator app.',
                 ], 422);
             }
 
@@ -247,7 +269,7 @@ class UserController extends Controller
 
             // Enable 2FA
             $profile->update([
-                'two_factor_secret' => encrypt($validated['secret']),
+                'two_factor_secret' => encrypt($secret),
                 'two_factor_enabled' => true,
                 'two_factor_backup_codes' => array_map(function($code) {
                     return \Hash::make($code);
@@ -312,6 +334,49 @@ class UserController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to disable 2FA',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Test TOTP generation (for debugging)
+     */
+    public function test2FA(Request $request): JsonResponse
+    {
+        try {
+            $secret = $request->input('secret');
+
+            if (!$secret) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Secret is required',
+                ], 400);
+            }
+
+            $twoFactorService = new \App\Services\TwoFactorAuthService();
+
+            // Get current codes
+            $timestamp = floor(time() / 30);
+            $codes = [];
+
+            for ($i = -2; $i <= 2; $i++) {
+                $time = $timestamp + $i;
+                $codes["T{$i}"] = $twoFactorService->getCode($secret, $time);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'current_timestamp' => $timestamp,
+                    'codes' => $codes,
+                    'time' => time(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Test failed',
                 'error' => $e->getMessage(),
             ], 500);
         }

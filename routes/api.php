@@ -186,6 +186,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/user/2fa/enable', [UserController::class, 'enable2FA']);
     Route::post('/user/2fa/disable', [UserController::class, 'disable2FA']);
     Route::post('/user/2fa/verify', [UserController::class, 'verify2FACode']);
+    Route::post('/user/2fa/test', [UserController::class, 'test2FA']); // Debug endpoint
 
     Route::get('/user/listings', [UserController::class, 'listings']);
     Route::get('/user/favorites', [UserController::class, 'favorites']);
@@ -378,6 +379,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::put('/users/{id}/status', [AdminController::class, 'updateUserStatus']);
         Route::put('/users/{id}/role', [AdminController::class, 'updateUserRole']);
         Route::post('/users/{id}/promote-to-seller', [AdminController::class, 'promoteToSeller']);
+
+        // Seller Management
+        Route::put('/sellers/{id}', [SellerController::class, 'update']);
+        Route::delete('/sellers/{id}', [SellerController::class, 'destroy']);
+        Route::post('/sellers/{id}/toggle-verification', [SellerController::class, 'toggleVerification']);
+        Route::post('/sellers/{id}/toggle-featured', [SellerController::class, 'toggleFeatured']);
 
         // Email Verification
         Route::post('/email/verification', [AdminController::class, 'createEmailVerification']);
