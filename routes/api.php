@@ -103,6 +103,10 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
+    // Email Verification routes (public)
+    Route::get('/auth/verify-email', [AuthController::class, 'verifyEmail'])->name('verification.verify');
+    Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification']);
+
     // Public equipment routes
     Route::get('/equipment', [EquipmentController::class, 'index']);
     Route::get('/equipment/featured', [EquipmentController::class, 'featured']);

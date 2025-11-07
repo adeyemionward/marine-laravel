@@ -60,11 +60,13 @@ class AuthController extends Controller
             DB::commit();
 
             // Send email verification notification
-            // $user->notify(new \App\Notifications\EmailVerificationNotification());
-              Mail::to($user->email)->send(new NewUserNotification($user));
+            $user->notify(new \App\Notifications\EmailVerificationNotification());
 
-            // // Send notification to admin
-              Mail::to('info@marine.ng')->send(new NewUserAdminNotification($user));
+            // Send welcome email
+            Mail::to($user->email)->send(new NewUserNotification($user));
+
+            // Send notification to admin
+            Mail::to('info@marine.ng')->send(new NewUserAdminNotification($user));
 
 
             return response()->json([
