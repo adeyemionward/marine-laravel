@@ -462,7 +462,7 @@ class CustomerSupplierController extends Controller
     {
         try {
             $stats = [
-                'total_suppliers' => User::role(['seller'])->orWhereHas('listings')->distinct()->count(),
+                'total_suppliers' => User::role('seller')->orWhereHas('listings')->distinct()->count(),
                 'preferred_suppliers' => User::whereHas('sellerProfile', function($q) {
                         $q->whereNotNull('verified_at');
                     })->distinct()->count(),

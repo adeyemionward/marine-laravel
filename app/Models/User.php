@@ -234,7 +234,7 @@ class User extends Authenticatable implements MustVerifyEmail
         try {
             DB::transaction(function () use ($sellerData) {
                 // Create seller profile first
-                $this->sellerProfile()->updateOrCreate([], array_merge([
+                $this->sellerProfile()->create(array_merge([
                     'business_name' => $this->name,
                     'business_type' => 'Individual',
                     'verification_status' => 'pending',
@@ -303,4 +303,15 @@ class User extends Authenticatable implements MustVerifyEmail
     //     }
     //     return true;
     // }
+
+    /**
+     * Send the password reset notification.
+     *
+     * @param  string  $token
+     * @return void
+     */
+    public function sendPasswordResetNotification($token)
+    {
+        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
+    }
 }
