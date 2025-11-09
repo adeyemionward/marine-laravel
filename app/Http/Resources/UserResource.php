@@ -21,6 +21,8 @@ class UserResource extends JsonResource
             'email_verified_at' => $this->email_verified_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
+            'active_status' => $this->active_status,
+            'is_active' => $this->active_status == \App\Models\User::ACTIVE,
             'profile' => new UserProfileResource($this->whenLoaded('profile')),
             'role' => $this->whenLoaded('role', function () {
                 return [
