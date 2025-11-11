@@ -7,9 +7,12 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Events\MessageSent;
 use App\Events\UserTyping;
+use App\Mail\NewMessageNotification;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 
 class MessageController extends Controller
 {
@@ -17,7 +20,7 @@ class MessageController extends Controller
     {
         try {
             $userId = Auth::user()->profile->id;
-            
+
             $conversations = Conversation::where(function ($query) use ($userId) {
                 $query->where('buyer_id', $userId)
                       ->orWhere('seller_id', $userId);
@@ -29,9 +32,9 @@ class MessageController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $conversations->map(function ($conversation) use ($userId) {
-                    $otherParty = $conversation->buyer_id === $userId ? 
+                    $otherParty = $conversation->buyer_id === $userId ?
                         $conversation->seller : $conversation->buyer;
-                        
+
                     return [
                         'id' => $conversation->id,
                         'listing' => [
@@ -78,7 +81,7 @@ class MessageController extends Controller
     {
         try {
             $userId = Auth::user()->profile->id;
-            
+
             $conversation = Conversation::where(function ($query) use ($userId) {
                 $query->where('buyer_id', $userId)
                       ->orWhere('seller_id', $userId);
@@ -180,7 +183,6 @@ class MessageController extends Controller
                 'content' => $validated['message'],
             ]);
 
-            $conversation->touch(); // Update conversation timestamp
 
             // Broadcast the message to real-time listeners
             broadcast(new MessageSent($message))->toOthers();
@@ -210,7 +212,7 @@ class MessageController extends Controller
             ]);
 
             $userId = Auth::user()->profile->id;
-            
+
             $conversation = Conversation::where(function ($query) use ($userId) {
                 $query->where('buyer_id', $userId)
                       ->orWhere('seller_id', $userId);
@@ -223,6 +225,8 @@ class MessageController extends Controller
             ]);
 
             $conversation->touch(); // Update conversation timestamp
+             // Determine who should receive the email
+            
 
             // Broadcast the message to real-time listeners
             broadcast(new MessageSent($message))->toOthers();
@@ -248,7 +252,7 @@ class MessageController extends Controller
     {
         try {
             $userId = Auth::user()->profile->id;
-            
+
             $message = Message::where('sender_id', '!=', $userId)
                 ->findOrFail($id);
 
@@ -275,14 +279,14 @@ class MessageController extends Controller
             ]);
 
             $userId = Auth::user()->profile->id;
-            
+
             $conversation = Conversation::where(function ($query) use ($userId) {
                 $query->where('buyer_id', $userId)
                       ->orWhere('seller_id', $userId);
             })->findOrFail($id);
 
             $user = Auth::user()->profile;
-            
+
             // Broadcast typing status to other participants
             broadcast(new UserTyping($user, $conversation->id, $validated['is_typing']))->toOthers();
 
