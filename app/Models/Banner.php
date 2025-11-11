@@ -14,6 +14,7 @@ class Banner extends Model
         'title',
         'description',
         'position',
+        'display_duration',
         'media_type',
         'media_url',
         'link_url',
@@ -57,6 +58,7 @@ class Banner extends Model
 
     protected $casts = [
         'priority' => 'integer',
+        'display_duration' => 'integer',
         'click_count' => 'integer',
         'impression_count' => 'integer',
         'revenue_earned' => 'decimal:2',

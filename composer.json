@@ -14,6 +14,7 @@
         "laravel/reverb": "@beta",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
+        "pragmarx/google2fa-laravel": "*",
         "pusher/pusher-php-server": "*",
         "spatie/laravel-permission": "^6.21",
         "symfony/process": "^7.3"

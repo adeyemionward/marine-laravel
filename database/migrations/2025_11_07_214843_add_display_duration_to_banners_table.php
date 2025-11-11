@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->integer('active_status')->default(1)->after('password');
+        Schema::table('banners', function (Blueprint $table) {
+            $table->integer('display_duration')->default(60)->after('position')->comment('Display duration in seconds (15, 30, 60)');
         });
     }
 
@@ -21,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('active_status');
+        Schema::table('banners', function (Blueprint $table) {
+            $table->dropColumn('display_duration');
         });
     }
 };

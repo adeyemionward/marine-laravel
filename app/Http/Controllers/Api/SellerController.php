@@ -26,9 +26,9 @@ class SellerController extends Controller
             // ->verified();
 
             // Filter by verified status if requested
-            if ($request->boolean('verified_only')) {
-                $query->verified();
-            }
+            // if ($request->boolean('verified_only')) {
+            //     $query->verified();
+            // }
 
             // Filter by specialty
             if ($request->filled('specialty')) {
@@ -836,6 +836,120 @@ class SellerController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to post reply',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // ============================================
+    // ADMIN SELLER MANAGEMENT ENDPOINTS
+    // ============================================
+
+    /**
+     * Update seller profile (Admin only)
+     */
+    public function update(Request $request, $id): JsonResponse
+    {
+        try {
+            $seller = SellerProfile::findOrFail($id);
+
+            $validated = $request->validate([
+                'business_name' => 'sometimes|string|max:255',
+                'location' => 'sometimes|string|max:255',
+                'years_active' => 'sometimes|integer|min:0',
+                'rating' => 'sometimes|numeric|min:0|max:5',
+                'bio' => 'sometimes|nullable|string',
+                'is_verified' => 'sometimes|boolean',
+                'is_featured' => 'sometimes|boolean',
+            ]);
+
+            $seller->update($validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Seller updated successfully',
+                'data' => $seller->fresh(['user', 'userProfile']),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update seller',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete seller profile (Admin only)
+     */
+    public function destroy($id): JsonResponse
+    {
+        try {
+            $seller = SellerProfile::findOrFail($id);
+
+            // Optionally handle cascading deletes or soft delete
+            $seller->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Seller deleted successfully',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete seller',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Toggle seller verification status (Admin only)
+     */
+    public function toggleVerification($id): JsonResponse
+    {
+        try {
+            $seller = SellerProfile::findOrFail($id);
+
+            $seller->update([
+                'is_verified' => !$seller->is_verified,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $seller->is_verified ? 'Seller verified successfully' : 'Seller unverified successfully',
+                'data' => $seller->fresh(['user', 'userProfile']),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to toggle verification status',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Toggle seller featured status (Admin only)
+     */
+    public function toggleFeatured($id): JsonResponse
+    {
+        try {
+            $seller = SellerProfile::findOrFail($id);
+
+            $seller->update([
+                'is_featured' => !$seller->is_featured,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $seller->is_featured ? 'Seller added to featured list' : 'Seller removed from featured list',
+                'data' => $seller->fresh(['user', 'userProfile']),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to toggle featured status',
                 'error' => $e->getMessage(),
             ], 500);
         }

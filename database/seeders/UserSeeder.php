@@ -41,11 +41,15 @@ class UserSeeder extends Seeder
                 'is_verified' => true,
                 'company_name' => 'Marine Engineering Nigeria',
                 'company_description' => 'Leading marine equipment marketplace in Nigeria',
-                'phone' => '+234-800-123-4567',
-                'address' => '123 Marina Street',
-                'city' => 'Lagos',
                 'state' => 'Lagos',
                 'country' => 'Nigeria',
+                'nin' => '12345678901',
+                'business_phone' => '+234-800-123-4567',
+                'business_address' => '123 Marina Street, Lagos, Nigeria',
+                'business_registration' => 'RC123456',
+                'tax_id' => '12345678-0001',
+                'is_business_account' => true,
+                'business_type' => 'corporation',
             ]
         );
 
@@ -76,6 +80,7 @@ class UserSeeder extends Seeder
                 'city' => 'Lagos',
                 'state' => 'Lagos',
                 'country' => 'Nigeria',
+                'nin' => '12345678902',
             ]
         );
 
@@ -144,6 +149,7 @@ class UserSeeder extends Seeder
                     'city' => $sellerData['city'],
                     'state' => $sellerData['state'],
                     'country' => 'Nigeria',
+                    'nin' => '12345678903',
                 ]
             );
         }
@@ -197,6 +203,7 @@ class UserSeeder extends Seeder
                     'city' => $buyerData['city'],
                     'state' => $buyerData['state'],
                     'country' => 'Nigeria',
+                    'nin' => '12345678904',
                 ]
             );
         }

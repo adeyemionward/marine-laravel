@@ -1645,8 +1645,16 @@ class AdminController extends Controller
             $user = User::findOrFail($id);
             $plan = SubscriptionPlan::findOrFail($validated['plan_id']);
 
+            // Ensure user has a profile
+            if (!$user->profile) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User profile not found',
+                ], 400);
+            }
+
             // Check if user already has an active subscription
-            $existingSubscription = $user->subscription()
+            $existingSubscription = Subscription::where('user_id', $user->profile->id)
                 ->where('status', 'active')
                 ->first();
 
@@ -1658,7 +1666,8 @@ class AdminController extends Controller
             }
 
             // Create subscription
-            $subscription = $user->subscription()->create([
+            $subscription = Subscription::create([
+                'user_id' => $user->profile->id,
                 'plan_id' => $plan->id,
                 'status' => 'active',
                 'started_at' => Carbon::now(),
