@@ -7,10 +7,13 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\EquipmentListing;
 use App\Events\MessageSent;
+use App\Mail\NewMessageNotification;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class ConversationController extends Controller
 {
@@ -130,11 +133,19 @@ class ConversationController extends Controller
 
             // Send initial message if provided
             if (!empty($validated['initial_message'])) {
-                Message::create([
+                $message=  Message::create([
                     'conversation_id' => $conversation->id,
                     'sender_id' => $userId,
                     'content' => $validated['initial_message'],
                 ]);
+
+                //Send email notification to the receiver (seller)
+                $receiver = User::find($listing->seller_id);
+                $sender = Auth::user();
+
+                if ($receiver && $receiver->email) {
+                    Mail::to($receiver->email)->send(new NewMessageNotification($sender, $message));
+                }
 
                 // Update conversation timestamp
                 $conversation->touch();
@@ -319,8 +330,36 @@ class ConversationController extends Controller
 
             $message = Message::create($messageData);
 
+            $sender = Auth::user();
+            $receiverId = $conversation->buyer_id == $userId
+                ? $conversation->seller_id
+                : $conversation->buyer_id;
+
+            $receiver = User::find($receiverId);
+
+            // Send email notification to the other participant
+            if ($receiver && $receiver->email) {
+                Mail::to($receiver->email)->send(
+                    new NewMessageNotification($sender, $message)
+                );
+            }
+
             // Update conversation timestamp
             $conversation->touch();
+
+            $sender = Auth::user();
+            $receiverId = $conversation->buyer_id == $userId
+                ? $conversation->seller_id
+                : $conversation->buyer_id;
+
+            $receiver = User::find($receiverId);
+
+            // Send email notification to the other participant
+            if ($receiver && $receiver->email) {
+                Mail::to($receiver->email)->send(
+                    new NewMessageNotification($sender, $message)
+                );
+            }
 
             // Load sender relationship
             $message->load('sender');
