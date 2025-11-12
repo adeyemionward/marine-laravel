@@ -156,7 +156,7 @@ class EquipmentListing extends Model
     public function scopeInLocation(Builder $query, string $state, string $city = null): Builder
     {
         $query->where('location_state', $state);
-        
+
         if ($city) {
             $query->where('location_city', $city);
         }
@@ -169,7 +169,7 @@ class EquipmentListing extends Model
         if ($min !== null) {
             $query->where('price', '>=', $min);
         }
-        
+
         if ($max !== null) {
             $query->where('price', '<=', $max);
         }

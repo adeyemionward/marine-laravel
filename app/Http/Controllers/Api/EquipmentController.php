@@ -423,8 +423,8 @@ class EquipmentController extends Controller
                 'contact_phone' => $request->contact_phone,
                 'contact_email' => $request->contact_email ?? $user->email,
                 'negotiable' => $request->boolean('negotiable', false),
-                'status' => 'active',
-                'published_at' => now(),
+                'status' => 'pending', // Changed from 'active' - requires admin approval
+                'published_at' => null, // Will be set when admin approves
             ]);
 
             // Update seller profile listing count
