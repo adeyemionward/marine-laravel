@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 class EquipmentController extends Controller
 {
 
@@ -38,7 +40,7 @@ class EquipmentController extends Controller
                 }
             ])
                 ->active()
-                ->published()
+                // ->published()
                 ->notExpired();
 
             // Filter by category
@@ -99,7 +101,7 @@ class EquipmentController extends Controller
                 // For similar equipment requests, just take the specified number
                 $limit = min(20, max(1, (int) $request->get('limit', 8)));
                 $equipment = $query->limit($limit)->get();
-                
+
                 return response()->json([
                     'success' => true,
                     'data' => EquipmentListingResource::collection($equipment),
@@ -171,7 +173,7 @@ class EquipmentController extends Controller
     {
         try {
             $limit = min(20, max(1, (int) $request->get('limit', 12)));
-            
+
             $equipment = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
@@ -212,7 +214,7 @@ class EquipmentController extends Controller
 
             $query = $request->get('q');
             $perPage = min(50, max(1, (int) $request->get('per_page', 12)));
-            
+
             $equipment = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
@@ -254,7 +256,7 @@ class EquipmentController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            \Log::info('EquipmentController::store START', [
+            Log::info('EquipmentController::store START', [
                 'request_data' => $request->except(['images']),
                 'has_images' => $request->hasFile('images')
             ]);
@@ -267,7 +269,7 @@ class EquipmentController extends Controller
             }
 
             // Log validation data for debugging
-            \Log::info('Validation data', [
+            Log::info('Validation data', [
                 'price' => $request->price,
                 'is_poa' => $request->boolean('is_poa'),
                 'condition' => $request->condition
@@ -323,7 +325,7 @@ class EquipmentController extends Controller
                 ], 400);
             }
 
-            \Log::info('User subscription check', [
+            Log::info('User subscription check', [
                 'user_id' => $user->id,
                 'profile_id' => $userProfile->id,
                 'has_active_subscription' => method_exists($user, 'activeSubscription')
@@ -334,7 +336,7 @@ class EquipmentController extends Controller
             $subscription = method_exists($user, 'activeSubscription') ? $user->activeSubscription() : null;
 
             if (!$subscription) {
-                \Log::warning('No active subscription found, allowing listing creation anyway');
+                Log::warning('No active subscription found, allowing listing creation anyway');
                 // Create a mock subscription object for limits
                 $subscription = (object)[
                     'plan' => (object)[
@@ -348,8 +350,8 @@ class EquipmentController extends Controller
             $currentListings = EquipmentListing::where('seller_id', $user->id)
                 ->where('status', 'active')
                 ->count();
-            
-            if ($subscription->plan->max_listings !== -1 && 
+
+            if ($subscription->plan->max_listings !== -1 &&
                 $currentListings >= $subscription->plan->max_listings) {
                 return response()->json([
                     'success' => false,
@@ -363,7 +365,7 @@ class EquipmentController extends Controller
                 $maxImages = $subscription->plan->max_images_per_listing ?? 10;
                 $images = array_slice($request->images, 0, $maxImages);
 
-                \Log::info('Processing images', [
+                Log::info('Processing images', [
                     'images_count' => count($images),
                     'first_image_type' => gettype($images[0] ?? null)
                 ]);
@@ -454,16 +456,16 @@ class EquipmentController extends Controller
         try {
             $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
             ->active()
-            ->published()
+            // ->published()
             ->notExpired()
             ->where('id', $id)
             ->first();
-            
+
 
             // Increment view count
            // $listing->incrementViewCount();
-            
-            
+
+
 if (!$listing) {
     return response()->json([
         'success' => false,
@@ -490,7 +492,7 @@ if (!$listing) {
     public function update(Request $request, int $id): JsonResponse
     {
         try {
-            \Log::info('Equipment update request received', [
+            Log::info('Equipment update request received', [
                 'id' => $id,
                 'user_id' => $request->user()?->id,
                 'data' => $request->except(['images'])
@@ -581,7 +583,7 @@ if (!$listing) {
 
             $listing->update($updateData);
 
-            \Log::info('Equipment update successful', ['id' => $id]);
+            Log::info('Equipment update successful', ['id' => $id]);
 
             return response()->json([
                 'success' => true,
@@ -589,7 +591,7 @@ if (!$listing) {
                 'data' => $listing->load(['category', 'seller']),
             ]);
         } catch (\Exception $e) {
-            \Log::error('Equipment update failed', [
+            Log::error('Equipment update failed', [
                 'id' => $id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -656,7 +658,7 @@ if (!$listing) {
     {
         try {
             $isFavorited = rand(0, 1) === 1;
-            
+
             return response()->json([
                 'success' => true,
                 'message' => $isFavorited ? 'Added to favorites' : 'Removed from favorites',
@@ -680,7 +682,7 @@ if (!$listing) {
             $validator = Validator::make($request->all(), [
                 'listing_id'   => 'required|integer',
             ]);
-        
+
             if ($validator->fails()) {
                 return response()->json([
                     'message' => 'Validation failed',
@@ -738,7 +740,7 @@ if (!$listing) {
                 return response()->json([
                     'message' => 'Item not found in favorites',
                     'status'=>true,
-                    
+
                 ], 200);
             }
 
@@ -876,17 +878,17 @@ if (!$listing) {
 
             $maxImages = $subscription->plan->max_images_per_listing ?? 5;
             $images = array_slice($request->file('images'), 0, $maxImages);
-            
+
             $imagePaths = [];
             foreach ($images as $image) {
                 $path = $image->store('listings', 'public');
                 $imagePaths[] = $path;
             }
-            
+
             // Merge with existing images or replace them
             $existingImages = $listing->images ?? [];
             $allImages = array_merge($existingImages, $imagePaths);
-            
+
             // Limit total images
             $listing->images = array_slice($allImages, 0, $maxImages);
             $listing->save();
@@ -1048,7 +1050,7 @@ if (!$listing) {
                 ]
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to fetch reviews: ' . $e->getMessage());
+            Log::error('Failed to fetch reviews: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch reviews',
@@ -1137,7 +1139,7 @@ if (!$listing) {
                 'data' => $review
             ], 201);
         } catch (\Exception $e) {
-            \Log::error('Failed to add review: ' . $e->getMessage());
+            Log::error('Failed to add review: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Failed to submit review. Please try again.',
                 'status' => false,
@@ -1202,7 +1204,7 @@ if (!$listing) {
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to mark review as helpful: ' . $e->getMessage());
+            Log::error('Failed to mark review as helpful: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to mark review as helpful',
@@ -1229,7 +1231,7 @@ if (!$listing) {
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to mark review as not helpful: ' . $e->getMessage());
+            Log::error('Failed to mark review as not helpful: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to mark review as not helpful',

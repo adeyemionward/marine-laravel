@@ -340,24 +340,25 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         // Listing management
         Route::get('/listings', [AdminController::class, 'listings']);
+
+        // Specific routes MUST come before parameterized routes
+        Route::get('/listings/moderation', [AdminController::class, 'getListingsForModeration']);
+        Route::get('/listings/moderation/stats', [AdminController::class, 'getModerationStats']);
+        Route::post('/listings/cleanup', [AdminController::class, 'runAutoCleanup']);
+        Route::put('/listings/priority/bulk', [AdminController::class, 'bulkUpdatePriority']);
+        Route::get('/listings/priority/stats', [AdminController::class, 'getPriorityStatistics']);
+        Route::get('/listings/featured/stats', [AdminController::class, 'getFeaturedStatistics']);
+
+        // Parameterized routes come AFTER specific routes
+        Route::get('/listings/{id}', [AdminController::class, 'showListing']); // Admin can view any listing status
         Route::post('/listings/{id}/approve', [AdminController::class, 'approveListing']);
         Route::post('/listings/{id}/reject', [AdminController::class, 'rejectListing']);
         Route::delete('/listings/{id}', [AdminController::class, 'deleteListing']);
         Route::post('/listings/{id}/feature', [AdminController::class, 'featureListing']);
-
-        // Listing moderation
-        Route::get('/listings/moderation', [AdminController::class, 'getListingsForModeration']);
         Route::post('/listings/{id}/moderate', [AdminController::class, 'moderateListing']);
         Route::post('/listings/{id}/extend', [AdminController::class, 'extendListingExpiration']);
-        Route::post('/listings/cleanup', [AdminController::class, 'runAutoCleanup']);
-        Route::get('/listings/moderation/stats', [AdminController::class, 'getModerationStats']);
-
-        // Priority and featured listing management
         Route::put('/listings/{id}/priority', [AdminController::class, 'updateListingPriority']);
         Route::put('/listings/{id}/featured', [AdminController::class, 'updateFeaturedStatus']);
-        Route::put('/listings/priority/bulk', [AdminController::class, 'bulkUpdatePriority']);
-        Route::get('/listings/priority/stats', [AdminController::class, 'getPriorityStatistics']);
-        Route::get('/listings/featured/stats', [AdminController::class, 'getFeaturedStatistics']);
 
         // User management
         Route::get('/users', [AdminController::class, 'users']);

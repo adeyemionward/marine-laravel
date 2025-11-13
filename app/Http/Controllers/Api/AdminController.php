@@ -99,6 +99,8 @@ class AdminController extends Controller
             $listing->update([
                 'status' => 'rejected',
                 'rejection_reason' => $validated['reason'] ?? null,
+                'published_at' => null, // Clear published date when rejecting
+                'is_verified' => false, // Remove verification when rejecting
             ]);
 
             return response()->json([
@@ -111,6 +113,26 @@ class AdminController extends Controller
                 'message' => 'Failed to reject listing',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    public function showListing($id): JsonResponse
+    {
+        try {
+            // Admin can view listing with ANY status (pending, active, rejected, etc.)
+            $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
+                ->findOrFail($id);
+
+            return response()->json([
+                'success' => true,
+                'data' => new EquipmentListingResource($listing),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Listing not found',
+                'error' => $e->getMessage(),
+            ], 404);
         }
     }
 
