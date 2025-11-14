@@ -48,6 +48,16 @@ class EquipmentController extends Controller
                 $query->byCategory($request->category_id);
             }
 
+            // Filter by listing type (sale, lease, rent)
+            if ($request->filled('listing_type')) {
+                $query->where('listing_type', $request->listing_type);
+            }
+
+            // Filter by available for lease (backward compatibility)
+            if ($request->filled('available_for_lease') && $request->boolean('available_for_lease')) {
+                $query->where('listing_type', 'lease');
+            }
+
             // Filter by location
             if ($request->filled('state')) {
                 $query->inLocation($request->state, $request->city);
@@ -297,6 +307,16 @@ class EquipmentController extends Controller
                 'contact_email' => 'nullable|email',
                 'negotiable' => 'boolean',
                 'is_poa' => 'boolean',
+                // Lease-specific fields
+                'lease_price_daily' => 'nullable|numeric|min:0',
+                'lease_price_weekly' => 'nullable|numeric|min:0',
+                'lease_price_monthly' => 'nullable|numeric|min:0',
+                'lease_minimum_period' => 'nullable|integer|min:1',
+                'lease_security_deposit' => 'nullable|numeric|min:0',
+                'lease_maintenance_included' => 'nullable|boolean',
+                'lease_insurance_required' => 'nullable|boolean',
+                'lease_operator_license_required' => 'nullable|boolean',
+                'lease_commercial_use_allowed' => 'nullable|boolean',
             ]);
 
             // Additional validation: Price is required for 'sale' listings if not POA
@@ -414,6 +434,7 @@ class EquipmentController extends Controller
                 'description' => $request->description,
                 'price' => $price,
                 'category_id' => $request->category_id,
+                'listing_type' => $request->listing_type ?? 'sale',
                 'condition' => $request->condition,
                 'brand' => $request->brand,
                 'model' => $request->model,
@@ -425,6 +446,16 @@ class EquipmentController extends Controller
                 'contact_phone' => $request->contact_phone,
                 'contact_email' => $request->contact_email ?? $user->email,
                 'negotiable' => $request->boolean('negotiable', false),
+                // Lease-specific fields
+                'lease_price_daily' => $request->lease_price_daily,
+                'lease_price_weekly' => $request->lease_price_weekly,
+                'lease_price_monthly' => $request->lease_price_monthly,
+                'lease_minimum_period' => $request->lease_minimum_period,
+                'lease_security_deposit' => $request->lease_security_deposit,
+                'lease_maintenance_included' => $request->boolean('lease_maintenance_included', false),
+                'lease_insurance_required' => $request->boolean('lease_insurance_required', false),
+                'lease_operator_license_required' => $request->boolean('lease_operator_license_required', false),
+                'lease_commercial_use_allowed' => $request->boolean('lease_commercial_use_allowed', false),
                 'status' => 'pending', // Changed from 'active' - requires admin approval
                 'published_at' => null, // Will be set when admin approves
             ]);
@@ -528,6 +559,16 @@ if (!$listing) {
                 'delivery_fee' => 'nullable|numeric',
                 'allows_inspection' => 'nullable|boolean',
                 'hide_address' => 'nullable|boolean',
+                // Lease-specific fields
+                'lease_price_daily' => 'nullable|numeric|min:0',
+                'lease_price_weekly' => 'nullable|numeric|min:0',
+                'lease_price_monthly' => 'nullable|numeric|min:0',
+                'lease_minimum_period' => 'nullable|integer|min:1',
+                'lease_security_deposit' => 'nullable|numeric|min:0',
+                'lease_maintenance_included' => 'nullable|boolean',
+                'lease_insurance_required' => 'nullable|boolean',
+                'lease_operator_license_required' => 'nullable|boolean',
+                'lease_commercial_use_allowed' => 'nullable|boolean',
             ]);
 
             $user = $request->user();
@@ -542,13 +583,17 @@ if (!$listing) {
 
             // Prepare update data
             $updateData = $request->only([
-                'title', 'description', 'price', 'category_id', 'condition',
+                'title', 'description', 'price', 'category_id', 'listing_type', 'condition',
                 'brand', 'model', 'year', 'location_state', 'location_city', 'location_address',
                 'specifications', 'features', 'contact_phone', 'contact_email', 'contact_whatsapp',
                 'contact_methods', 'availability_hours', 'is_price_negotiable', 'is_poa',
                 'delivery_available', 'delivery_radius', 'delivery_fee', 'allows_inspection',
                 'hide_address', 'power_source', 'min_price', 'payment_methods', 'pricing_notes',
-                'currency', 'priority_tier'
+                'currency', 'priority_tier',
+                // Lease-specific fields
+                'lease_price_daily', 'lease_price_weekly', 'lease_price_monthly',
+                'lease_minimum_period', 'lease_security_deposit', 'lease_maintenance_included',
+                'lease_insurance_required', 'lease_operator_license_required', 'lease_commercial_use_allowed'
             ]);
 
             // Handle images - can be array of image data (already uploaded) or file uploads
