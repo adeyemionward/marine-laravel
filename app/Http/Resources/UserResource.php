@@ -14,6 +14,19 @@ class UserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $isSeller = $this->isSeller();
+        $roles = method_exists($this->resource, 'getRoleNames') ? $this->getRoleNames() : [];
+        $sellerProfile = $this->relationLoaded('sellerProfile') ? $this->sellerProfile : null;
+
+        // Debug logging
+        \Log::info('UserResource Debug', [
+            'user_id' => $this->id,
+            'roles' => $roles,
+            'is_seller' => $isSeller,
+            'has_seller_profile' => $sellerProfile !== null,
+            'seller_profile_loaded' => $this->relationLoaded('sellerProfile'),
+        ]);
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -38,11 +51,8 @@ class UserResource extends JsonResource
                 fn() => $this->getAllPermissions()->pluck('name')
             ),
             // Role object with permissions (Spatie)
-            'roles' => $this->when(
-                method_exists($this->resource, 'getRoleNames'),
-                fn() => $this->getRoleNames()
-            ),
-            'is_seller' => $this->isSeller(),
+            'roles' => $roles,
+            'is_seller' => $isSeller,
             'seller_profile' => $this->whenLoaded('sellerProfile'),
             'subscriptions' => $this->whenLoaded('subscriptions'),
             'subscription' => $this->when(
