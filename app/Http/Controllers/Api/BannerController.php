@@ -632,9 +632,9 @@ class BannerController extends Controller
                 'pricing.bottom_middle' => 'required|numeric|min:0',
                 'pricing.bottom_left' => 'required|numeric|min:0',
                 'pricing.bottom_right' => 'required|numeric|min:0',
-                'pricing.sidebar_right' => 'required|numeric|min:0',
-                'pricing.sidebar_left' => 'required|numeric|min:0',
-                'pricing.middle' => 'required|numeric|min:0',
+                // 'pricing.sidebar_right' => 'required|numeric|min:0',
+                // 'pricing.sidebar_left' => 'required|numeric|min:0',
+                // 'pricing.middle' => 'required|numeric|min:0',
             ]);
 
             $pricing = $validated['pricing'];
