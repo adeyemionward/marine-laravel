@@ -1,63 +1,63 @@
-name: Deploy Laravel API to Staging
+# name: Deploy Laravel API to Staging
 
-on:
-  push:
-    branches: [ develop, staging ]
-  workflow_dispatch:
+# on:
+#   push:
+#     branches: [ develop, staging ]
+#   workflow_dispatch:
 
-jobs:
-  deploy-staging:
-    name: Deploy to Staging Server
-    runs-on: ubuntu-latest
+# jobs:
+#   deploy-staging:
+#     name: Deploy to Staging Server
+#     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v3
 
-      - name: Deploy to Staging Server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.STAGING_SERVER_HOST }}
-          username: ${{ secrets.STAGING_SERVER_USER }}
-          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.STAGING_SERVER_PORT || 22 }}
-          script: |
-            set -e
+#       - name: Deploy to Staging Server
+#         uses: appleboy/ssh-action@master
+#         with:
+#           host: ${{ secrets.STAGING_SERVER_HOST }}
+#           username: ${{ secrets.STAGING_SERVER_USER }}
+#           key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+#           port: ${{ secrets.STAGING_SERVER_PORT || 22 }}
+#           script: |
+#             set -e
 
-            echo "🚀 Starting staging deployment..."
+#             echo "🚀 Starting staging deployment..."
 
-            # Navigate to staging project directory
-            cd ${{ secrets.STAGING_PROJECT_PATH || '/var/www/marine-laravel-staging' }}
+#             # Navigate to staging project directory
+#             cd ${{ secrets.STAGING_PROJECT_PATH || '/var/www/marine-laravel-staging' }}
 
-            # Pull latest code
-            echo "📥 Pulling latest code..."
-            git fetch origin
-            git reset --hard origin/${{ github.ref_name }}
+#             # Pull latest code
+#             echo "📥 Pulling latest code..."
+#             git fetch origin
+#             git reset --hard origin/${{ github.ref_name }}
 
-            # Install dependencies
-            echo "📦 Installing dependencies..."
-            composer install --no-interaction --prefer-dist --optimize-autoloader
+#             # Install dependencies
+#             echo "📦 Installing dependencies..."
+#             composer install --no-interaction --prefer-dist --optimize-autoloader
 
-            # Clear caches
-            echo "🧹 Clearing caches..."
-            php artisan cache:clear
-            php artisan config:clear
-            php artisan route:clear
-            php artisan view:clear
+#             # Clear caches
+#             echo "🧹 Clearing caches..."
+#             php artisan cache:clear
+#             php artisan config:clear
+#             php artisan route:clear
+#             php artisan view:clear
 
-            # Run migrations
-            echo "🗄️  Running migrations..."
-            php artisan migrate --force
+#             # Run migrations
+#             echo "🗄️  Running migrations..."
+#             php artisan migrate --force
 
-            # Rebuild caches
-            echo "⚡ Rebuilding caches..."
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
+#             # Rebuild caches
+#             echo "⚡ Rebuilding caches..."
+#             php artisan config:cache
+#             php artisan route:cache
+#             php artisan view:cache
 
-            # Restart services
-            echo "♻️  Restarting services..."
-            sudo systemctl reload php8.2-fpm || sudo systemctl reload php-fpm
-            sudo systemctl reload nginx
+#             # Restart services
+#             echo "♻️  Restarting services..."
+#             sudo systemctl reload php8.2-fpm || sudo systemctl reload php-fpm
+#             sudo systemctl reload nginx
 
-            echo "✅ Staging deployment completed!"
+#             echo "✅ Staging deployment completed!"

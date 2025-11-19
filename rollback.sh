@@ -1,4 +1,4 @@
-#!/bin/bash
+{# #!/bin/bash
 
 # Rollback script - reverts to previous Git commit
 # Usage: ./rollback.sh [number_of_commits_to_go_back]
@@ -82,4 +82,4 @@ echo ""
 echo -e "${YELLOW}⚠️  Don't forget to:${NC}"
 echo "  1. Test the application"
 echo "  2. Check logs for errors"
-echo "  3. Consider force-pushing to update remote: git push -f origin main"
+echo "  3. Consider force-pushing to update remote: git push -f origin main" #}

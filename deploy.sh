@@ -1,4 +1,4 @@
-#!/bin/bash
+{# #!/bin/bash
 
 # Manual deployment script (fallback if GitHub Actions fails)
 # Usage: ./deploy.sh
@@ -73,4 +73,4 @@ echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"
 echo -e "${GREEN}📊 Deployment Summary:${NC}"
 echo "   - Branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "   - Commit: $(git rev-parse --short HEAD)"
-echo "   - Time: $(date)"
+echo "   - Time: $(date)" #}
