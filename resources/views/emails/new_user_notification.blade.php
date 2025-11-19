@@ -38,7 +38,7 @@
     <div class="container">
         <h2>Welcome to Marine.ng!</h2>
 
-        <p>Thank you for creating an account with Marine.ng, Nigeria's premier marine equipment marketplace.</p>
+        <p>Thank you for creating an account with Marine.ng, Africa's premier marine equipment marketplace.</p>
 
         {{-- <h3>Why verify your email?</h3> --}}
         <ul>
