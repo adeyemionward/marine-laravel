@@ -576,10 +576,10 @@ class BannerController extends Controller
             if ($pricing->isEmpty()) {
                 // Create default pricing if none exists
                 $defaults = [
-                    ['banner_type' => 'hero', 'base_price' => 50000, 'duration_type' => 'weekly', 'duration_value' => 1],
-                    ['banner_type' => 'sidebar', 'base_price' => 25000, 'duration_type' => 'weekly', 'duration_value' => 1],
-                    ['banner_type' => 'category', 'base_price' => 30000, 'duration_type' => 'weekly', 'duration_value' => 1],
-                    ['banner_type' => 'footer', 'base_price' => 15000, 'duration_type' => 'weekly', 'duration_value' => 1],
+                    ['banner_type' => 'hero', 'base_price' => 50000, 'duration_type' => 'weekly', 'duration_value' => 1]
+                    // ['banner_type' => 'sidebar', 'base_price' => 25000, 'duration_type' => 'weekly', 'duration_value' => 1]
+                    // ['banner_type' => 'category', 'base_price' => 30000, 'duration_type' => 'weekly', 'duration_value' => 1],
+                    // ['banner_type' => 'footer', 'base_price' => 15000, 'duration_type' => 'weekly', 'duration_value' => 1],
                 ];
 
                 foreach ($defaults as $default) {
@@ -595,9 +595,13 @@ class BannerController extends Controller
             // Format pricing for frontend (hero, sidebar, category, footer)
             $formattedPricing = [
                 'hero' => 50000,
-                'sidebar' => 25000,
-                'category' => 30000,
-                'footer' => 15000,
+                'bottom_middle' => 15000,
+                'bottom_left' => 15000,
+                'bottom_right' => 15000,
+                'header' => 50000,
+                'middle' => 30000,
+                'sidebar_left' => 25000,
+                'sidebar_right' => 25000
             ];
 
             foreach ($pricing as $item) {
@@ -626,15 +630,16 @@ class BannerController extends Controller
             $validated = $request->validate([
                 'pricing' => 'required|array',
                 'pricing.hero' => 'required|numeric|min:0',
-                'pricing.sidebar' => 'required|numeric|min:0',
+                'pricing.header' => 'required|numeric|min:0',
+                // 'pricing.sidebar' => 'required|numeric|min:0',
                 // 'pricing.category' => 'required|numeric|min:0',
-                'pricing.footer' => 'required|numeric|min:0',
+                // 'pricing.footer' => 'required|numeric|min:0',
                 'pricing.bottom_middle' => 'required|numeric|min:0',
                 'pricing.bottom_left' => 'required|numeric|min:0',
                 'pricing.bottom_right' => 'required|numeric|min:0',
-                // 'pricing.sidebar_right' => 'required|numeric|min:0',
-                // 'pricing.sidebar_left' => 'required|numeric|min:0',
-                // 'pricing.middle' => 'required|numeric|min:0',
+                'pricing.sidebar_right' => 'required|numeric|min:0',
+                'pricing.sidebar_left' => 'required|numeric|min:0',
+                'pricing.middle' => 'required|numeric|min:0',
             ]);
 
             $pricing = $validated['pricing'];
@@ -656,12 +661,14 @@ class BannerController extends Controller
             $updatedPricing = BannerPricing::active()->get();
             $formattedPricing = [
                 'hero' => 50000,
-                'sidebar' => 25000,
-                'category' => 30000,
-                'footer' => 15000,
                 'bottom_middle' => 15000,
                 'bottom_left' => 15000,
                 'bottom_right' => 15000,
+                'header' => 50000,
+                'middle' => 30000,
+                'sidebar_left' => 25000,
+                'sidebar_right' => 25000,
+
             ];
 
             foreach ($updatedPricing as $item) {
