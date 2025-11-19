@@ -87,14 +87,46 @@ Route::get('/debug-messages', function () {
 
 // Public routes
 Route::prefix('v1')->group(function () {
-    // Health check endpoint
+    // Health check endpoint for CI/CD and monitoring
     Route::get('/health', function () {
-        return response()->json([
-            'status' => 'ok',
-            'message' => 'API is healthy',
-            'timestamp' => now(),
-            'version' => '1.0.0'
-        ]);
+        try {
+            // Check database connection
+            $dbStatus = 'connected';
+            try {
+                \DB::connection()->getPdo();
+            } catch (\Exception $e) {
+                $dbStatus = 'disconnected';
+            }
+
+            // Check cache
+            $cacheStatus = 'ok';
+            try {
+                \Cache::put('health_check', 'test', 5);
+                \Cache::get('health_check');
+            } catch (\Exception $e) {
+                $cacheStatus = 'error';
+            }
+
+            return response()->json([
+                'status' => 'ok',
+                'message' => 'API is healthy',
+                'timestamp' => now()->toIso8601String(),
+                'version' => '1.0.0',
+                'environment' => app()->environment(),
+                'services' => [
+                    'database' => $dbStatus,
+                    'cache' => $cacheStatus,
+                ],
+                'git_commit' => env('GIT_COMMIT', 'unknown'),
+                'deployed_at' => env('DEPLOYED_AT', 'unknown'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Health check failed',
+                'error' => app()->environment('local') ? $e->getMessage() : 'Internal error',
+            ], 500);
+        }
     });
 
     // Authentication routes

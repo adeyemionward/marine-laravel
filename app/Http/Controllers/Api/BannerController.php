@@ -627,8 +627,14 @@ class BannerController extends Controller
                 'pricing' => 'required|array',
                 'pricing.hero' => 'required|numeric|min:0',
                 'pricing.sidebar' => 'required|numeric|min:0',
-                'pricing.category' => 'required|numeric|min:0',
+                // 'pricing.category' => 'required|numeric|min:0',
                 'pricing.footer' => 'required|numeric|min:0',
+                'pricing.bottom_middle' => 'required|numeric|min:0',
+                'pricing.bottom_left' => 'required|numeric|min:0',
+                'pricing.bottom_right' => 'required|numeric|min:0',
+                'pricing.sidebar_right' => 'required|numeric|min:0',
+                'pricing.sidebar_left' => 'required|numeric|min:0',
+                'pricing.middle' => 'required|numeric|min:0',
             ]);
 
             $pricing = $validated['pricing'];
@@ -653,6 +659,9 @@ class BannerController extends Controller
                 'sidebar' => 25000,
                 'category' => 30000,
                 'footer' => 15000,
+                'bottom_middle' => 15000,
+                'bottom_left' => 15000,
+                'bottom_right' => 15000,
             ];
 
             foreach ($updatedPricing as $item) {
