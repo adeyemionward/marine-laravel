@@ -250,15 +250,15 @@ class KnowledgeBaseController extends Controller
             $query = KnowledgeBaseDocument::with(['category']);
 
             // Apply filters
-            if ($request->has('category_id')) {
+            if ($request->filled('category_id')) {
                 $query->where('category_id', $request->category_id);
             }
 
-            if ($request->has('status')) {
+            if ($request->filled('status')) {
                 $query->where('status', $request->status);
             }
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
                     $q->where('title', 'like', "%{$search}%")
@@ -266,8 +266,24 @@ class KnowledgeBaseController extends Controller
                 });
             }
 
-            $documents = $query->orderBy('created_at', 'desc')
-                              ->paginate($request->get('per_page', 15));
+            if ($request->filled('date_from')) {
+                $query->where('created_at', '>=', \Carbon\Carbon::parse($request->date_from));
+            }
+
+            if ($request->filled('date_to')) {
+                $query->where('created_at', '<=', \Carbon\Carbon::parse($request->date_to)->endOfDay());
+            }
+
+            // Apply sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            $allowedSortBy = ['title', 'created_at', 'status', 'view_count'];
+
+            if (in_array($sortBy, $allowedSortBy)) {
+                $query->orderBy($sortBy, $sortOrder);
+            }
+
+            $documents = $query->paginate($request->get('per_page', 15));
 
             return response()->json([
                 'success' => true,

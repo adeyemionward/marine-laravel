@@ -249,6 +249,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/{listingId}/reviews/{reviewId}/helpful', [EquipmentReviewController::class, 'markHelpful']);
     Route::post('/{listingId}/reviews/{reviewId}/not-helpful', [EquipmentReviewController::class, 'markNotHelpful']);
     Route::post('/{listingId}/reviews/{reviewId}/reply', [EquipmentReviewController::class, 'sellerReply']);
+    Route::patch('/{id}/status', [EquipmentController::class, 'updateStatus']);
     Route::post('/{id}/sold', [EquipmentController::class, 'markSold']);
     Route::post('/{id}/view', [EquipmentController::class, 'trackView']);
     Route::get('/{id}/analytics', [EquipmentController::class, 'analytics']);

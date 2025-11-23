@@ -651,6 +651,64 @@ if (!$listing) {
     }
 
     /**
+     * Update the status of an equipment listing.
+     */
+    public function updateStatus(Request $request, int $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'status' => 'required|string|in:sold,hired,active',
+            ]);
+
+            $user = $request->user();
+            $newStatus = $validated['status'];
+
+            // Super admin can update any listing, others can only update their own
+            if ($user->isSuperAdmin() || $user->isAdmin()) {
+                $listing = EquipmentListing::findOrFail($id);
+            } else {
+                $listing = EquipmentListing::where('seller_id', '==', $user->id)
+                    ->findOrFail($id);
+            }
+
+            switch ($newStatus) {
+                case 'sold':
+                    $listing->markAsSold();
+                    break;
+                case 'hired':
+                    $listing->markAsHired();
+                    break;
+                case 'active':
+                    $listing->markAsAvailable();
+                    break;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Listing status updated successfully.',
+                'data' => new EquipmentListingResource($listing),
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Listing not found or you do not have permission to update it.',
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Failed to update listing status', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update listing status.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Remove the specified equipment listing
      */
     public function destroy(Request $request, int $id): JsonResponse

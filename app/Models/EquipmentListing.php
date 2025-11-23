@@ -307,4 +307,14 @@ class EquipmentListing extends Model
     {
         $this->update(['status' => ListingStatus::SOLD]);
     }
+
+    public function markAsHired(): void
+    {
+        $this->update(['status' => ListingStatus::HIRED]);
+    }
+
+    public function markAsAvailable(): void
+    {
+        $this->update(['status' => ListingStatus::ACTIVE]);
+    }
 }

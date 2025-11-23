@@ -56,6 +56,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('invoices:send-overdue-reminders')
             ->dailyAt('11:00')
             ->timezone('Africa/Lagos');
+
+        // Archive old sold or hired listings
+        $schedule->command('app:archive-sold-or-hired-listings')
+            ->dailyAt('03:00')
+            ->timezone('Africa/Lagos');
     }
 
     /**
