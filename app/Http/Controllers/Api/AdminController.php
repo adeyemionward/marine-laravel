@@ -2410,15 +2410,21 @@ class AdminController extends Controller
     public function getListingsForModeration(Request $request): JsonResponse
     {
         try {
-            $query = EquipmentListing::with(['category', 'seller'])
-                ->orderBy('created_at', 'desc');
+            $query = EquipmentListing::with(['category', 'seller']);
+
+            // Apply category filter
+            if ($request->has('category_id') && $request->category_id !== '' && $request->category_id !== 'all') {
+                $query->where('category_id', $request->category_id);
+            }
 
             // Apply status filter
             if ($request->has('status') && $request->status !== 'all' && $request->status !== null) {
                 $query->where('status', $request->status);
             } else {
                 // By default, exclude archived listings unless explicitly requested
-                $query->where('status', '!=', 'archived');
+                if (!$request->has('status') || $request->status !== 'archived') {
+                    $query->where('status', '!=', 'archived');
+                }
             }
 
             // Apply expiration filter
@@ -2435,6 +2441,19 @@ class AdminController extends Controller
                         break;
                 }
             }
+            
+            // Apply sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+
+            // Sanitize sort_by to prevent SQL injection
+            $validSortColumns = ['created_at', 'updated_at', 'title', 'price'];
+            if (in_array($sortBy, $validSortColumns)) {
+                $query->orderBy($sortBy, $sortOrder);
+            } else {
+                $query->orderBy('created_at', 'desc');
+            }
+
 
             // Allow customizable pagination
             $perPage = min(100, max(1, (int) $request->get('per_page', 24)));
