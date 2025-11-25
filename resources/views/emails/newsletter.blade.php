@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marine.ng Newsletter</title>
+    <title>Marine.africa Newsletter</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -42,7 +42,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>Marine.ng Newsletter</h1>
+        <h1>Marine.africa Newsletter</h1>
         <p>Your trusted source for marine equipment and updates</p>
     </div>
 
@@ -53,10 +53,10 @@
     </div>
 
     <div class="footer">
-        <p>Thank you for subscribing to Marine.ng Newsletter</p>
-        <p>Marine.ng - Your premier destination for marine equipment</p>
-        <p><a href="{{ config('app.frontend_url', 'https://marine.ng') }}" style="color: #2563eb; text-decoration: none;">Visit our website</a></p>
-        <p>© {{ date('Y') }} Marine.ng. All rights reserved.</p>
+        <p>Thank you for subscribing to Marine.africa Newsletter</p>
+        <p>Marine.africa - Your premier destination for marine equipment</p>
+        <p><a href="{{ config('app.frontend_url', 'https://marine.africa') }}" style="color: #2563eb; text-decoration: none;">Visit our website</a></p>
+        <p>© {{ date('Y') }} Marine.africa. All rights reserved.</p>
     </div>
 </body>
 </html>

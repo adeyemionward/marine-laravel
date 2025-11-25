@@ -338,7 +338,7 @@ class SellerController extends Controller
             Mail::to($user->email)->send(new SellerApplicationSubmitted($application));
 
             // Send email to admin
-            Mail::to('info@marine.ng')->send(new NewSellerApplicationAdmin($application));
+            Mail::to('info@marine.africa')->send(new NewSellerApplicationAdmin($application));
 
             return response()->json([
                 'success' => true,

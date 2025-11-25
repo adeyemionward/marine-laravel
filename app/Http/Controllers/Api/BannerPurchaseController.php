@@ -173,7 +173,7 @@ class BannerPurchaseController extends Controller
                 'flutterwave' => true,
                 'bank_transfer' => true,
             ],
-            'instructions' => 'Please use the invoice number as payment reference. Send payment confirmation to billing@marine.ng',
+            'instructions' => 'Please use the invoice number as payment reference. Send payment confirmation to billing@marine.africa',
         ];
     }
 

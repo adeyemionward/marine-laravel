@@ -28,7 +28,7 @@ class NewUserNotification extends Mailable
      */
     public function build()
     {
-        return $this->subject('🎉 Welcome to Marine.ng')
+        return $this->subject('🎉 Welcome to Marine.africa')
                     ->view('emails.new_user_notification') // Blade view we created
                     ->with([
                         'userName' => $this->user->profile->full_name ?? $this->user->name,

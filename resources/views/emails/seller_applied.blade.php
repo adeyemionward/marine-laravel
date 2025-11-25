@@ -12,12 +12,12 @@
 
 <p>We have received your application and our team is reviewing it. You will be notified once the review is completed.</p>
 
-<p>This is an automated notification from Marine.ng.</p>
+<p>This is an automated notification from Marine.africa.</p>
 <p>Best regards,<br>
-The Marine.ng Team</p>
+The Marine.africa Team</p>
 
 <div class="footer">
-    <p> This is an automated notification from Marine.ng.</p>
-    &copy; {{ date('Y') }} Marine.ng. All rights reserved.
+    <p> This is an automated notification from Marine.africa.</p>
+    &copy; {{ date('Y') }} Marine.africa. All rights reserved.
 </div>
 

@@ -16,6 +16,6 @@
 
 <p>Approval has been processed successfully.</p>
 <div class="footer">
-    <p> This is an automated notification from Marine.ng.</p>
-    Marine.ng.
+    <p> This is an automated notification from Marine.africa.</p>
+    Marine.africa.
 </div>

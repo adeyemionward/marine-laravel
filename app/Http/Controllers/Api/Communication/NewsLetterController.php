@@ -539,8 +539,8 @@ class NewsLetterController extends Controller
                 'frequency' => 'weekly',
                 'day_of_week' => 'monday',
                 'send_time' => '09:00',
-                'default_from_name' => config('mail.from.name', 'Marine.ng'),
-                'default_from_email' => config('mail.from.address', 'newsletter@marine.ng'),
+                'default_from_name' => config('mail.from.name', 'Marine.africa'),
+                'default_from_email' => config('mail.from.address', 'newsletter@marine.africa'),
                 'unsubscribe_link' => true,
                 'track_opens' => false,
                 'track_clicks' => false,
@@ -754,7 +754,7 @@ class NewsLetterController extends Controller
 
         // Header with gradient
         // $content .= '<div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 40px 20px; text-align: center;">';
-        // $content .= '<h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Marine.ng</h1>';
+        // $content .= '<h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Marine.africa</h1>';
         // $content .= '<p style="color: #e0e7ff; margin: 10px 0 0 0; font-size: 16px;">Premium Marine Equipment Newsletter</p>';
         // $content .= '</div>';
 
@@ -786,7 +786,7 @@ class NewsLetterController extends Controller
             $content .= '</div>';
 
             // View Details button
-            $listingUrl = config('app.frontend_url', 'https://marine.ng') . '/equipment-listing-detail?id=' . ($listingData->id ?? '');
+            $listingUrl = config('app.frontend_url', 'https://marine.africa') . '/equipment-listing-detail?id=' . ($listingData->id ?? '');
             $content .= '<div style="text-align: center;">';
             $content .= '<a href="' . $listingUrl . '" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.25);">';
             $content .= 'View Details</a>';
@@ -798,9 +798,9 @@ class NewsLetterController extends Controller
 
         // Footer
         $content .= '<div style="background: #1f2937; padding: 40px 20px; text-align: center; color: #9ca3af;">';
-        $content .= '<h3 style="color: white; margin: 0 0 16px 0; font-size: 20px;">Marine.ng</h3>';
+        $content .= '<h3 style="color: white; margin: 0 0 16px 0; font-size: 20px;">Marine.africa</h3>';
         $content .= '<p style="margin: 0 0 16px 0; line-height: 1.5;">Nigeria\'s premier marketplace for marine equipment</p>';
-        $content .= '<p style="margin: 0; font-size: 14px;">Visit us at <a href="https://marine.ng" style="color: #3b82f6;">marine.ng</a></p>';
+        $content .= '<p style="margin: 0; font-size: 14px;">Visit us at <a href="https://marine.africa" style="color: #3b82f6;">marine.africa</a></p>';
         $content .= '</div>';
 
         $content .= '</div>';

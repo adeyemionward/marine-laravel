@@ -856,7 +856,7 @@ class AdminController extends Controller
 
 
             // ✅ Send admin email
-            Mail::to('info@marine.ng')->send(  new AdminSellerApprovedMail($application, $validated['admin_notes'] ?? null));
+            Mail::to('info@marine.africa')->send(  new AdminSellerApprovedMail($application, $validated['admin_notes'] ?? null));
 
             $response = [
                 'success' => true,
@@ -1090,13 +1090,13 @@ class AdminController extends Controller
      */
     private function getSellerTermsAndConditions(): string
     {
-        return "By paying this invoice, you agree to Marine.ng's seller terms and conditions:\n\n" .
+        return "By paying this invoice, you agree to Marine.africa's seller terms and conditions:\n\n" .
                "1. Monthly subscription fee is required to maintain active seller status\n" .
                "2. Late payments may result in temporary suspension of seller privileges\n" .
-               "3. All listings must comply with Marine.ng quality standards\n" .
+               "3. All listings must comply with Marine.africa quality standards\n" .
                "4. Commission fees apply to completed transactions\n" .
                "5. Subscription auto-renews unless cancelled\n\n" .
-               "For full terms, visit: https://marine.ng/seller-terms";
+               "For full terms, visit: https://marine.africa/seller-terms";
     }
 
     public function rejectSellerApplication(Request $request, $id): JsonResponse
@@ -3974,13 +3974,13 @@ class AdminController extends Controller
     {
         try {
             $brandingSettings = [
-                'site_name' => SystemSetting::getValue('site_name', 'Marine.ng'),
+                'site_name' => SystemSetting::getValue('site_name', 'Marine.africa'),
                 'site_logo' => SystemSetting::getValue('site_logo', ''),
                 'site_favicon' => SystemSetting::getValue('site_favicon', ''),
                 'primary_color' => SystemSetting::getValue('primary_color', '#1e40af'),
                 'secondary_color' => SystemSetting::getValue('secondary_color', '#64748b'),
                 'footer_text' => SystemSetting::getValue('footer_text', ''),
-                'contact_email' => SystemSetting::getValue('contact_email', 'contact@marine.ng'),
+                'contact_email' => SystemSetting::getValue('contact_email', 'contact@marine.africa'),
                 'support_phone' => SystemSetting::getValue('support_phone', ''),
                 'social_facebook' => SystemSetting::getValue('social_facebook', ''),
                 'social_twitter' => SystemSetting::getValue('social_twitter', ''),

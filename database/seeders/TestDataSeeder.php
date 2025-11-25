@@ -95,25 +95,25 @@ class TestDataSeeder extends Seeder
         }
 
         // Create test users
-        $testUser = User::firstOrCreate(['email' => 'user@marine.ng'], [
+        $testUser = User::firstOrCreate(['email' => 'user@marine.africa'], [
             'name' => 'Test User',
-            'email' => 'user@marine.ng',
+            'email' => 'user@marine.africa',
             'password' => Hash::make('password'),
             'role_id' => $userRole->id,
             'email_verified_at' => now()
         ]);
 
-        $testSeller = User::firstOrCreate(['email' => 'seller@marine.ng'], [
+        $testSeller = User::firstOrCreate(['email' => 'seller@marine.africa'], [
             'name' => 'Test Seller',
-            'email' => 'seller@marine.ng',
+            'email' => 'seller@marine.africa',
             'password' => Hash::make('password'),
             'role_id' => $sellerRole->id,
             'email_verified_at' => now()
         ]);
 
-        $testAdmin = User::firstOrCreate(['email' => 'admin@marine.ng'], [
+        $testAdmin = User::firstOrCreate(['email' => 'admin@marine.africa'], [
             'name' => 'Admin User',
-            'email' => 'admin@marine.ng',
+            'email' => 'admin@marine.africa',
             'password' => Hash::make('password'),
             'role_id' => $adminRole->id,
             'email_verified_at' => now()
@@ -204,7 +204,7 @@ class TestDataSeeder extends Seeder
                 'view_count' => 156,
                 'specifications' => ['Length: 25ft', 'Engine: 150HP', 'Capacity: 8 people'],
                 'contact_phone' => '+234-801-234-5679',
-                'contact_email' => 'seller@marine.ng',
+                'contact_email' => 'seller@marine.africa',
                 'is_price_negotiable' => true
             ],
             [
@@ -224,7 +224,7 @@ class TestDataSeeder extends Seeder
                 'view_count' => 89,
                 'specifications' => ['Power: 75HP', 'Type: 4-Stroke', 'Weight: 165kg'],
                 'contact_phone' => '+234-801-234-5679',
-                'contact_email' => 'seller@marine.ng',
+                'contact_email' => 'seller@marine.africa',
                 'is_price_negotiable' => false
             ]
         ];
@@ -238,8 +238,8 @@ class TestDataSeeder extends Seeder
 
         $this->command->info('Test data seeded successfully!');
         $this->command->info('Test users created:');
-        $this->command->info('- User: user@marine.ng / password');
-        $this->command->info('- Seller: seller@marine.ng / password');
-        $this->command->info('- Admin: admin@marine.ng / password');
+        $this->command->info('- User: user@marine.africa / password');
+        $this->command->info('- Seller: seller@marine.africa / password');
+        $this->command->info('- Admin: admin@marine.africa / password');
     }
 }

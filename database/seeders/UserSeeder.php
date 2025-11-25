@@ -19,10 +19,10 @@ class UserSeeder extends Seeder
 
         // Create admin user
         $adminUser = User::updateOrCreate(
-            ['email' => 'admin@marine.ng'],
+            ['email' => 'admin@marine.africa'],
             [
                 'name' => 'System Administrator',
-                'email' => 'admin@marine.ng',
+                'email' => 'admin@marine.africa',
                 'password' => Hash::make('admin123'),
                 'email_verified_at' => now(),
             ]
@@ -55,10 +55,10 @@ class UserSeeder extends Seeder
 
         // Create test user
         $testUser = User::updateOrCreate(
-            ['email' => 'user@marine.ng'],
+            ['email' => 'user@marine.africa'],
             [
                 'name' => 'Test User',
-                'email' => 'user@marine.ng',
+                'email' => 'user@marine.africa',
                 'password' => Hash::make('user123'),
                 'email_verified_at' => now(),
             ]
@@ -88,7 +88,7 @@ class UserSeeder extends Seeder
         $sellers = [
             [
                 'name' => 'John Okafor',
-                'email' => 'john@oceanmarine.ng',
+                'email' => 'john@oceanmarine.africa',
                 'company_name' => 'Ocean Marine Equipment Ltd',
                 'company_description' => 'Specialized in high-quality marine engines and navigation systems',
                 'city' => 'Lagos',
@@ -104,7 +104,7 @@ class UserSeeder extends Seeder
             ],
             [
                 'name' => 'Ibrahim Mohammed',
-                'email' => 'ibrahim@northernmarine.ng',
+                'email' => 'ibrahim@northernmarine.africa',
                 'company_name' => 'Northern Marine Solutions',
                 'company_description' => 'Comprehensive marine equipment solutions for the northern region',
                 'city' => 'Kano',

@@ -47,7 +47,7 @@
         </div>
 
         <div class="footer">
-            This is an automated notification from Marine.ng.
+            This is an automated notification from Marine.africa.
         </div>
     </div>
 </body>

@@ -56,9 +56,9 @@ class EmailVerificationNotification extends Notification implements ShouldQueue
     protected function buildMailMessage(string $url): MailMessage
     {
         return (new MailMessage)
-            ->subject('🎉 Welcome to Marine.ng - Verify Your Email')
-            ->greeting('Welcome to Marine.ng!')
-            ->line('Thank you for creating an account with Marine.ng, Nigeria\'s premier marine equipment marketplace.')
+            ->subject('🎉 Welcome to Marine.africa - Verify Your Email')
+            ->greeting('Welcome to Marine.africa!')
+            ->line('Thank you for creating an account with Marine.africa, Nigeria\'s premier marine equipment marketplace.')
             ->line('**Why verify your email?**')
             ->line('• Access all platform features')
             ->line('• Receive important account notifications')
@@ -73,7 +73,7 @@ class EmailVerificationNotification extends Notification implements ShouldQueue
             ->line('4. Connect with other marine professionals')
             ->line('If you did not create an account, no further action is required.')
             ->salutation('Welcome aboard,')
-            ->salutation('The Marine.ng Team');
+            ->salutation('The Marine.africa Team');
     }
 
     /**

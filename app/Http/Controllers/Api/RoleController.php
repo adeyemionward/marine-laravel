@@ -31,7 +31,7 @@ class RoleController extends Controller
                 ]);
             }
 
-            $isAdminEmail = $user->email === 'admin@marine.ng';
+            $isAdminEmail = $user->email === 'admin@marine.africa';
 
             if (!$hasPermission && !$isAdminEmail) {
                 Log::warning('LIST_ROLES_UNAUTHORIZED', [

@@ -30,9 +30,9 @@ class SubscriptionExpiredNotification extends Notification implements ShouldQueu
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject('⚠️ Marine.ng Subscription Expired - Renew Now')
+            ->subject('⚠️ Marine.africa Subscription Expired - Renew Now')
             ->greeting('Hello ' . $notifiable->name)
-            ->line('Your Marine.ng seller subscription has expired.')
+            ->line('Your Marine.africa seller subscription has expired.')
             ->line('**Subscription Details:**')
             ->line('Plan: ' . $this->plan->name)
             ->line('Status: Expired')
@@ -48,7 +48,7 @@ class SubscriptionExpiredNotification extends Notification implements ShouldQueu
             ->action('Renew Subscription', url('/user-dashboard'))
             ->line('Don\'t lose potential sales - renew your subscription today!')
             ->salutation('Best regards,')
-            ->salutation('The Marine.ng Team');
+            ->salutation('The Marine.africa Team');
     }
 
     public function toArray($notifiable)

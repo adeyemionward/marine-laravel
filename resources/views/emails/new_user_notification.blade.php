@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Welcome to Marine.ng</title>
+    <title>Welcome to Marine.africa</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -36,9 +36,9 @@
 </head>
 <body>
     <div class="container">
-        <h2>Welcome to Marine.ng!</h2>
+        <h2>Welcome to Marine.africa!</h2>
 
-        <p>Thank you for creating an account with Marine.ng, Africa's premier marine equipment marketplace.</p>
+        <p>Thank you for creating an account with Marine.africa, Africa's premier marine equipment marketplace.</p>
 
         {{-- <h3>Why verify your email?</h3> --}}
         <ul>
@@ -59,10 +59,10 @@
         <p>If you did not create an account, no further action is required.</p>
 
         <p>Welcome aboard,</p>
-        <p>The Marine.ng Team</p>
+        <p>The Marine.africa Team</p>
 
         <div class="footer">
-            &copy; {{ date('Y') }} Marine.ng. All rights reserved.
+            &copy; {{ date('Y') }} Marine.africa. All rights reserved.
         </div>
     </div>
 </body>
