@@ -658,25 +658,27 @@ if (!$listing) {
         try {
             $validated = $request->validate([
                 'status' => 'required|string|in:sold,hired,active',
+                'next_available_date' => 'nullable|date',
             ]);
 
             $user = $request->user();
             $newStatus = $validated['status'];
+            $nextAvailableDate = $validated['next_available_date'] ?? null;
 
             // Super admin can update any listing, others can only update their own
             if ($user->isSuperAdmin() || $user->isAdmin()) {
                 $listing = EquipmentListing::findOrFail($id);
             } else {
-                $listing = EquipmentListing::where('seller_id', '==', $user->id)
+                $listing = EquipmentListing::where('seller_id', $user->id)
                     ->findOrFail($id);
             }
 
             switch ($newStatus) {
                 case 'sold':
-                    $listing->markAsSold();
+                    $listing->markAsSold($nextAvailableDate);
                     break;
                 case 'hired':
-                    $listing->markAsHired();
+                    $listing->markAsHired($nextAvailableDate);
                     break;
                 case 'active':
                     $listing->markAsAvailable();

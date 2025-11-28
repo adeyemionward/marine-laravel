@@ -2482,9 +2482,11 @@ class AdminController extends Controller
     public function moderateListing(Request $request, $id): JsonResponse
     {
         try {
+            // Accept extended set of moderation actions used by frontend UI
             $validated = $request->validate([
-                'action' => 'required|in:approve,reject,flag,suspend',
+                'action' => 'required|in:approve,reject,flag,suspend,pending,sold,archived,hired,hired_out,available,draft',
                 'reason' => 'nullable|string|max:500',
+                'available_date' => 'nullable|date|after_or_equal:today',
             ]);
 
             $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
@@ -2497,11 +2499,33 @@ class AdminController extends Controller
                 case 'reject':
                     $listing->status = 'rejected';
                     break;
-                case 'flag':
-                    $listing->status = 'flagged';
+                case 'pending':
+                    $listing->status = 'pending';
                     break;
-                case 'suspend':
-                    $listing->status = 'suspended';
+                case 'sold':
+                    $listing->status = 'sold';
+                    if (!$listing->sold_at) {
+                        $listing->sold_at = now();
+                    }
+                    break;
+                case 'archived':
+                    $listing->status = 'archived';
+                    break;
+                case 'hired':
+                case 'hired_out':
+                    $listing->status = 'hired';
+                    $listing->next_available_date = $validated['available_date'] ?? null;
+                    break;
+                // case 'available':
+                //     // treat available as active
+                //     $listing->status = 'active';
+                //     $listing->sold_at = null;
+                //     break;
+                case 'draft':
+                    $listing->status = 'draft';
+                    break;
+                default:
+                    // no-op
                     break;
             }
 

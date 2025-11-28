@@ -69,6 +69,7 @@ class EquipmentListing extends Model
         'seo_description',
         'published_at',
         'expires_at',
+        'next_available_date',
     ];
 
     protected $casts = [
@@ -102,6 +103,7 @@ class EquipmentListing extends Model
         'published_at' => 'datetime',
         'expires_at' => 'datetime',
         'featured_until' => 'datetime',
+        'next_available_date' => 'date',
         'year' => 'integer',
         'view_count' => 'integer',
         'inquiry_count' => 'integer',
@@ -303,18 +305,33 @@ class EquipmentListing extends Model
         ]);
     }
 
-    public function markAsSold(): void
+    public function markAsSold(?string $nextAvailableDate = null): void
     {
-        $this->update(['status' => ListingStatus::SOLD]);
+        $data = ['status' => ListingStatus::SOLD];
+
+        if ($nextAvailableDate !== null) {
+            $data['next_available_date'] = $nextAvailableDate;
+        }
+
+        $this->update($data);
     }
 
-    public function markAsHired(): void
+    public function markAsHired(?string $nextAvailableDate = null): void
     {
-        $this->update(['status' => ListingStatus::HIRED]);
+        $data = ['status' => ListingStatus::HIRED];
+
+        if ($nextAvailableDate !== null) {
+            $data['next_available_date'] = $nextAvailableDate;
+        }
+
+        $this->update($data);
     }
 
     public function markAsAvailable(): void
     {
-        $this->update(['status' => ListingStatus::ACTIVE]);
+        $this->update([
+            'status' => ListingStatus::ACTIVE,
+            'next_available_date' => null,
+        ]);
     }
 }

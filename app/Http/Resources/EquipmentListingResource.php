@@ -89,6 +89,7 @@ class EquipmentListingResource extends JsonResource
                 'allows_test_drive' => $this->allows_test_drive,
             ],
             'status' => $this->status,
+            'next_available_date' => $this->next_available_date,
             'is_featured' => $this->is_featured,
             'is_verified' => $this->is_verified,
             'view_count' => $this->view_count,
