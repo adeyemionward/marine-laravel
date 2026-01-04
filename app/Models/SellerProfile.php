@@ -279,7 +279,9 @@ class SellerProfile extends Model
 
     public function updateListingCount(): void
     {
-        $count = $this->listings()->where('status', 'active')->count();
+        $count = $this->listings()
+            ->whereNotIn('status', ['archived', 'rejected'])
+            ->count();
         $this->update(['total_listings' => $count]);
     }
 }

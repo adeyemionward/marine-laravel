@@ -328,7 +328,7 @@ class AdminController extends Controller
 
             $analytics = [
                 'overview' => [
-                    'total_listings' => EquipmentListing::count(),
+                    'total_listings' => EquipmentListing::whereNotIn('status', ['archived', 'rejected'])->count(),
                     'active_listings' => EquipmentListing::where('status', 'active')->count(),
                     'total_users' => User::count(),
                     'verified_users' => UserProfile::where('is_verified', true)->count(),

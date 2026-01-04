@@ -14,7 +14,7 @@ use App\Models\User;
 
 class EquipmentListing extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'seller_id',
@@ -114,7 +114,8 @@ class EquipmentListing extends Model
     // Relationships
     public function seller(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'seller_id');
+        return $this->belongsTo(SellerProfile::class, 'seller_id');
+        // return $this->belongsTo(User::class, 'seller_id');
     }
 
     public function category(): BelongsTo

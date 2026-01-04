@@ -31,7 +31,7 @@ class EquipmentController extends Controller
                 'seller' => function($q) {
                     $q->withCount([
                         'listings as listings_count' => function($query) {
-                            $query->where('status', 'active');
+                            $query->whereNotIn('status', ['archived', 'rejected']);
                         },
                         'sales as sales_count' => function($query) {
                             $query->where('status', 'completed');

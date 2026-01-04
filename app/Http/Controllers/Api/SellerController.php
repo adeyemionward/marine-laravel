@@ -586,7 +586,7 @@ class SellerController extends Controller
             $startDate = now()->subDays((int)$period);
 
             // Listings stats
-            $totalListings = $sellerProfile->listings()->count();
+            $totalListings = $sellerProfile->listings()->whereNotIn('status', ['archived', 'rejected'])->count();
             $activeListings = $sellerProfile->listings()->where('status', 'active')->count();
             $soldListings = $sellerProfile->listings()->where('status', 'sold')->count();
             $totalViews = $sellerProfile->listings()->sum('view_count');
