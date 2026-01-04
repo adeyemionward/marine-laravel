@@ -114,7 +114,7 @@ class EquipmentListing extends Model
     // Relationships
     public function seller(): BelongsTo
     {
-        return $this->belongsTo(SellerProfile::class, 'seller_id');
+        return $this->belongsTo(User::class, 'seller_id');
         // return $this->belongsTo(User::class, 'seller_id');
     }
 
