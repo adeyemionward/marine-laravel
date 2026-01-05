@@ -508,7 +508,7 @@ class UserController extends Controller
     public function listings(): JsonResponse
     {
         try {
-            $userId = Auth::user()->profile->id;
+            $userId = Auth::id();
 
             $listings = EquipmentListing::where('seller_id', $userId)
                 ->with(['category', 'seller'])
