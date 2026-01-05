@@ -114,6 +114,7 @@ class EquipmentListingResource extends JsonResource
 
                 return [
                     'id' => $seller->id,
+                    'seller_profile_id' => $sellerProfile?->id,
                     'name' => $profile?->full_name ?? $seller->name,
                     'full_name' => $profile?->full_name ?? $seller->name,
                     'company_name' => $profile?->company_name,
