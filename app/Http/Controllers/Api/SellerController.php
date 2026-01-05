@@ -508,7 +508,7 @@ class SellerController extends Controller
             $unreadMessages = DB::table('conversations')
                 ->join('messages', 'conversations.id', '=', 'messages.conversation_id')
                 ->where('conversations.seller_id', $user->id)
-                ->where('messages.is_read', false)
+                ->whereNull('messages.read_at')
                 ->where('messages.sender_id', '!=', $user->id)
                 ->count();
 
@@ -526,12 +526,7 @@ class SellerController extends Controller
                 : 0;
 
             // Get performance metrics
-            $avgResponseTime = DB::table('conversations')
-                ->join('messages', 'conversations.id', '=', 'messages.conversation_id')
-                ->where('conversations.seller_id', $user->id)
-                ->where('messages.sender_id', $user->id)
-                ->whereNotNull('messages.response_time_minutes')
-                ->avg('messages.response_time_minutes');
+            $avgResponseTime = $sellerProfile->avg_response_minutes;
 
             return response()->json([
                 'success' => true,
