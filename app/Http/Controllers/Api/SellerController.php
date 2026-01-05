@@ -20,7 +20,10 @@ class SellerController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = SellerProfile::with(['user', 'userProfile']);
+            $query = SellerProfile::with(['user', 'userProfile'])
+                ->withCount(['listings' => function($q) {
+                    $q->where('status', 'active');
+                }]);
 
             // Optional: Filter by verification status (uncomment to show only verified sellers)
             // ->verified();
@@ -96,6 +99,9 @@ class SellerController extends Controller
             $limit = min(12, max(1, (int) $request->get('limit', 8)));
 
             $sellers = SellerProfile::with(['user', 'userProfile'])
+                ->withCount(['listings' => function($q) {
+                    $q->where('status', 'active');
+                }])
                 ->verified()
                 ->featured()
                 ->limit($limit)
