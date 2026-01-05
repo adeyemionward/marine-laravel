@@ -27,6 +27,7 @@ class EquipmentController extends Controller
             $query = EquipmentListing::with([
                 'seller.profile',
                 'seller.sellerProfile',
+                'sellerProfile', // Add this
                 'category',
                 'seller' => function($q) {
                     $q->withCount([
@@ -485,7 +486,7 @@ class EquipmentController extends Controller
     public function show(int $id)
     {
         try {
-            $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
+            $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'sellerProfile', 'category'])
             ->active()
             // ->published()
             ->notExpired()
