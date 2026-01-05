@@ -266,9 +266,6 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/destroyReview/{id}', [EquipmentController::class, 'destroyReview']);
     Route::post('/markHelpful/{id}', [EquipmentController::class, 'markHelpful']);
     Route::post('/markNotHelpful/{id}', [EquipmentController::class, 'markNotHelpful']);
-
-    // Dynamic numeric route last
-    Route::get('/{id}', [EquipmentController::class, 'show'])->whereNumber('id');
 });
 
 
