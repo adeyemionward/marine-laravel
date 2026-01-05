@@ -33,9 +33,9 @@ class EquipmentController extends Controller
                         'listings as listings_count' => function($query) {
                             $query->whereNotIn('status', ['archived', 'rejected']);
                         },
-                        'sales as sales_count' => function($query) {
-                            $query->where('status', 'completed');
-                        }
+                        // 'sales as sales_count' => function($query) {
+                        //     $query->where('status', 'completed');
+                        // }
                     ]);
                 }
             ])

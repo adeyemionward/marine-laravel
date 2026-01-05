@@ -19,6 +19,7 @@ class EquipmentListing extends Model
 
     protected $fillable = [
         'seller_id',
+        'seller_profile_id',
         'category_id',
         'listing_type',
         'title',
@@ -115,8 +116,12 @@ class EquipmentListing extends Model
     // Relationships
     public function seller(): BelongsTo
     {
-        return $this->belongsTo(SellerProfile::class, 'seller_id');
-        // return $this->belongsTo(User::class, 'seller_id');
+        return $this->belongsTo(SellerProfile::class, 'seller_profile_id');
+    }
+
+    public function userProfile(): BelongsTo
+    {
+        return $this->belongsTo(UserProfile::class, 'seller_id');
     }
 
     public function category(): BelongsTo
