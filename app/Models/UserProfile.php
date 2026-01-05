@@ -44,6 +44,10 @@ class UserProfile extends Model
         'business_type',
     ];
 
+    protected $appends = [
+        'avatar_url',
+    ];
+
     protected $casts = [
         'role' => UserRole::class,
         'is_active' => 'boolean',

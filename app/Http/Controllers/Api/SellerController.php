@@ -478,19 +478,24 @@ class SellerController extends Controller
 
             // Get recent listings
             $recentListings = $sellerProfile->listings()
-                ->with(['category', 'images'])
+                ->with(['category'])
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get();
 
             // Get views and inquiries
             $totalViews = $sellerProfile->listings()
-                ->sum('views');
+                ->sum('view_count');
 
             $monthlyViews = $sellerProfile->listings()
-                ->join('equipment_views', 'equipment.id', '=', 'equipment_views.equipment_id')
-                ->where('equipment_views.created_at', '>=', $currentMonth)
-                ->count();
+                ->where('created_at', '>=', $currentMonth)
+                ->sum('view_count');
+
+            // Get total sales amount
+            $totalSales = DB::table('orders')
+                ->where('seller_id', $user->id)
+                ->where('payment_status', 'completed')
+                ->sum('total_amount');
 
             // Get recent reviews
             $recentReviews = $sellerProfile->reviews()
@@ -541,26 +546,17 @@ class SellerController extends Controller
                         'is_verified' => $sellerProfile->is_verified,
                         'specialties' => $sellerProfile->specialties,
                     ],
-                    'statistics' => [
-                        'listings' => [
-                            'active' => $activeListings,
-                            'pending' => $pendingListings,
-                            'sold' => $soldListings,
-                            'total' => $activeListings + $pendingListings + $soldListings,
-                        ],
-                        'views' => [
-                            'total' => $totalViews,
-                            'monthly' => $monthlyViews,
-                        ],
-                        'messages' => [
-                            'unread' => $unreadMessages,
-                        ],
-                        'performance' => [
-                            'avg_response_time' => $avgResponseTime ? round($avgResponseTime) : null,
-                            'listings_growth' => round($listingsGrowth, 1),
-                        ],
+                    'stats' => [ // Mobile app expects 'stats' key
+                        'totalListings' => $activeListings + $pendingListings + $soldListings,
+                        'activeListings' => $activeListings,
+                        'soldListings' => $soldListings,
+                        'totalViews' => $totalViews,
+                        'totalSales' => (float)$totalSales,
+                        'unreadMessages' => $unreadMessages,
+                        'listingsGrowth' => round($listingsGrowth, 1),
+                        'avgResponseTime' => $avgResponseTime ? round($avgResponseTime) : null,
                     ],
-                    'recent_listings' => $recentListings,
+                    'recent_listings' => \App\Http\Resources\EquipmentListingResource::collection($recentListings),
                     'recent_reviews' => $recentReviews,
                 ],
             ]);
