@@ -218,7 +218,7 @@ class EmailConfigurationController extends Controller
             try {
                 Mail::mailer('test_smtp')->send('emails.test', [], function ($message) use ($testEmail, $config) {
                     $message->to($testEmail)
-                        ->subject('SMTP Configuration Test - Marine.ng')
+                        ->subject('SMTP Configuration Test - Marine.africa')
                         ->from($config['from_email'], $config['from_name']);
                 });
             } catch (\Symfony\Component\Mailer\Exception\TransportException $e) {
@@ -384,7 +384,7 @@ class EmailConfigurationController extends Controller
             try {
                 Mail::mailer('test_smtp')->send('emails.test', [], function ($message) use ($testEmail, $config) {
                     $message->to($testEmail)
-                        ->subject('SMTP Configuration Test - Marine.ng')
+                        ->subject('SMTP Configuration Test - Marine.africa')
                         ->from($config['from_email'], $config['from_name']);
                 });
             } catch (\Symfony\Component\Mailer\Exception\TransportException $e) {

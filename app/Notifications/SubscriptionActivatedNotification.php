@@ -30,9 +30,9 @@ class SubscriptionActivatedNotification extends Notification implements ShouldQu
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject('🎉 Welcome to Marine.ng - Your Subscription is Active!')
+            ->subject('🎉 Welcome to Marine.africa - Your Subscription is Active!')
             ->greeting('Hello ' . $notifiable->name . '!')
-            ->line('Congratulations! Your Marine.ng seller subscription has been successfully activated.')
+            ->line('Congratulations! Your Marine.africa seller subscription has been successfully activated.')
             ->line('**Subscription Details:**')
             ->line('Plan: ' . $this->plan->name)
             ->line('Status: Active')
@@ -43,9 +43,9 @@ class SubscriptionActivatedNotification extends Notification implements ShouldQu
             ->line('• Receive customer inquiries')
             ->line('• Track your sales performance')
             ->action('Go to Seller Dashboard', url('/seller-dashboard'))
-            ->line('Thank you for choosing Marine.ng as your marine equipment marketplace!')
+            ->line('Thank you for choosing Marine.africa as your marine equipment marketplace!')
             ->salutation('Best regards,')
-            ->salutation('The Marine.ng Team');
+            ->salutation('The Marine.africa Team');
     }
 
     public function toArray($notifiable)

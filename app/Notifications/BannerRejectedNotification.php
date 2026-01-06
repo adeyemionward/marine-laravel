@@ -29,7 +29,7 @@ class BannerRejectedNotification extends Notification implements ShouldQueue
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject('❌ Banner Advertisement Rejected - Marine.ng')
+            ->subject('❌ Banner Advertisement Rejected - Marine.africa')
             ->greeting('Hello ' . $notifiable->name)
             ->line('Unfortunately, your banner advertisement has been rejected.')
             ->line('**Banner Details:**')
@@ -50,7 +50,7 @@ class BannerRejectedNotification extends Notification implements ShouldQueue
             ->action('View Advertising Guidelines', url('/advertising-guidelines'))
             ->line('If you have questions about this rejection, please contact our support team.')
             ->salutation('Best regards,')
-            ->salutation('The Marine.ng Team');
+            ->salutation('The Marine.africa Team');
     }
 
     public function toArray($notifiable)

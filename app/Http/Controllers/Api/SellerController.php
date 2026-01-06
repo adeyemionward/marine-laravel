@@ -20,7 +20,10 @@ class SellerController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = SellerProfile::with(['user', 'userProfile']);
+            $query = SellerProfile::with(['user', 'userProfile'])
+                ->withCount(['listings' => function($q) {
+                    $q->where('status', 'active');
+                }]);
 
             // Optional: Filter by verification status (uncomment to show only verified sellers)
             // ->verified();
@@ -96,6 +99,9 @@ class SellerController extends Controller
             $limit = min(12, max(1, (int) $request->get('limit', 8)));
 
             $sellers = SellerProfile::with(['user', 'userProfile'])
+                ->withCount(['listings' => function($q) {
+                    $q->where('status', 'active');
+                }])
                 ->verified()
                 ->featured()
                 ->limit($limit)
@@ -338,7 +344,7 @@ class SellerController extends Controller
             Mail::to($user->email)->send(new SellerApplicationSubmitted($application));
 
             // Send email to admin
-            Mail::to('info@marine.ng')->send(new NewSellerApplicationAdmin($application));
+            Mail::to('info@marine.africa')->send(new NewSellerApplicationAdmin($application));
 
             return response()->json([
                 'success' => true,
@@ -478,19 +484,24 @@ class SellerController extends Controller
 
             // Get recent listings
             $recentListings = $sellerProfile->listings()
-                ->with(['category', 'images'])
+                ->with(['category'])
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get();
 
             // Get views and inquiries
             $totalViews = $sellerProfile->listings()
-                ->sum('views');
+                ->sum('view_count');
 
             $monthlyViews = $sellerProfile->listings()
-                ->join('equipment_views', 'equipment.id', '=', 'equipment_views.equipment_id')
-                ->where('equipment_views.created_at', '>=', $currentMonth)
-                ->count();
+                ->where('created_at', '>=', $currentMonth)
+                ->sum('view_count');
+
+            // Get total sales amount
+            $totalSales = DB::table('orders')
+                ->where('seller_id', $user->id)
+                ->where('payment_status', 'completed')
+                ->sum('total_amount');
 
             // Get recent reviews
             $recentReviews = $sellerProfile->reviews()
@@ -503,7 +514,7 @@ class SellerController extends Controller
             $unreadMessages = DB::table('conversations')
                 ->join('messages', 'conversations.id', '=', 'messages.conversation_id')
                 ->where('conversations.seller_id', $user->id)
-                ->where('messages.is_read', false)
+                ->whereNull('messages.read_at')
                 ->where('messages.sender_id', '!=', $user->id)
                 ->count();
 
@@ -521,12 +532,7 @@ class SellerController extends Controller
                 : 0;
 
             // Get performance metrics
-            $avgResponseTime = DB::table('conversations')
-                ->join('messages', 'conversations.id', '=', 'messages.conversation_id')
-                ->where('conversations.seller_id', $user->id)
-                ->where('messages.sender_id', $user->id)
-                ->whereNotNull('messages.response_time_minutes')
-                ->avg('messages.response_time_minutes');
+            $avgResponseTime = $sellerProfile->avg_response_minutes;
 
             return response()->json([
                 'success' => true,
@@ -541,26 +547,17 @@ class SellerController extends Controller
                         'is_verified' => $sellerProfile->is_verified,
                         'specialties' => $sellerProfile->specialties,
                     ],
-                    'statistics' => [
-                        'listings' => [
-                            'active' => $activeListings,
-                            'pending' => $pendingListings,
-                            'sold' => $soldListings,
-                            'total' => $activeListings + $pendingListings + $soldListings,
-                        ],
-                        'views' => [
-                            'total' => $totalViews,
-                            'monthly' => $monthlyViews,
-                        ],
-                        'messages' => [
-                            'unread' => $unreadMessages,
-                        ],
-                        'performance' => [
-                            'avg_response_time' => $avgResponseTime ? round($avgResponseTime) : null,
-                            'listings_growth' => round($listingsGrowth, 1),
-                        ],
+                    'stats' => [ // Mobile app expects 'stats' key
+                        'totalListings' => $activeListings + $pendingListings + $soldListings,
+                        'activeListings' => $activeListings,
+                        'soldListings' => $soldListings,
+                        'totalViews' => $totalViews,
+                        'totalSales' => (float)$totalSales,
+                        'unreadMessages' => $unreadMessages,
+                        'listingsGrowth' => round($listingsGrowth, 1),
+                        'avgResponseTime' => $avgResponseTime ? round($avgResponseTime) : null,
                     ],
-                    'recent_listings' => $recentListings,
+                    'recent_listings' => \App\Http\Resources\EquipmentListingResource::collection($recentListings),
                     'recent_reviews' => $recentReviews,
                 ],
             ]);
@@ -586,7 +583,7 @@ class SellerController extends Controller
             $startDate = now()->subDays((int)$period);
 
             // Listings stats
-            $totalListings = $sellerProfile->listings()->count();
+            $totalListings = $sellerProfile->listings()->whereNotIn('status', ['archived', 'rejected'])->count();
             $activeListings = $sellerProfile->listings()->where('status', 'active')->count();
             $soldListings = $sellerProfile->listings()->where('status', 'sold')->count();
             $totalViews = $sellerProfile->listings()->sum('view_count');

@@ -46,11 +46,11 @@ class AppBrandingController extends Controller
         $config = AppBranding::first();
 
         $data = [
-            'appName' => $config->app_name ?? 'Marine.ng',
-            'logoUrl' => $config->primary_logo ?? '/assets/images/marine.ng_logo_2026-1754742671588.png',
-            'adminLogoUrl' => $config->admin_logo ?? '/assets/images/marine.ng_logo_2026-1754742671588.png',
-            'logoAlt' => ($config->app_name ?? 'Marine.ng') . ' Logo',
-            'adminLogoAlt' => ($config->app_name ?? 'Marine.ng') . ' Admin Logo',
+            'appName' => $config->app_name ?? 'Marine.africa',
+            'logoUrl' => $config->primary_logo ?? '/assets/images/marine.africa_logo_2026-1754742671588.png',
+            'adminLogoUrl' => $config->admin_logo ?? '/assets/images/marine.africa_logo_2026-1754742671588.png',
+            'logoAlt' => ($config->app_name ?? 'Marine.africa') . ' Logo',
+            'adminLogoAlt' => ($config->app_name ?? 'Marine.africa') . ' Admin Logo',
         ];
 
         return response()->json([

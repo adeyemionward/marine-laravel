@@ -27,7 +27,7 @@ class BannerApprovalRequiredNotification extends Notification implements ShouldQ
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject('🔔 New Banner Requires Approval - Marine.ng Admin')
+            ->subject('🔔 New Banner Requires Approval - Marine.africa Admin')
             ->greeting('Hello Admin!')
             ->line('A new banner advertisement has been purchased and requires your approval.')
             ->line('**Banner Details:**')
@@ -40,7 +40,7 @@ class BannerApprovalRequiredNotification extends Notification implements ShouldQ
             ->line('Scheduled Start: ' . $this->banner->start_date->format('F j, Y'))
             ->action('Review Banner', url('/admin-dashboard'))
             ->line('Please review and approve or reject this banner advertisement.')
-            ->salutation('Marine.ng Admin System');
+            ->salutation('Marine.africa Admin System');
     }
 
     public function toArray($notifiable)

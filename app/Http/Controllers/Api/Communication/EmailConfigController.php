@@ -155,13 +155,13 @@ class EmailConfigController extends Controller
             'mail.mailers.smtp.username' => $config->username,
             'mail.mailers.smtp.password' => Crypt::decryptString($config->password),
             'mail.from.address' => $config->from_email,
-            'mail.from.name' => $config->from_name ?? 'Marine.ng System',
+            'mail.from.name' => $config->from_name ?? 'Marine.africa System',
         ]);
 
         try {
-            Mail::raw('This is a test email from Marine.ng SMTP configuration.', function ($message) use ($validated, $config) {
+            Mail::raw('This is a test email from Marine.africa SMTP configuration.', function ($message) use ($validated, $config) {
                 $message->to($validated['test_email'])
-                    ->subject('Test Email Configuration - Marine.ng');
+                    ->subject('Test Email Configuration - Marine.africa');
             });
 
             return response()->json([

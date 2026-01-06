@@ -267,8 +267,8 @@ class NewsletterController extends Controller
             'frequency' => 'monthly',
             'day_of_week' => 'tuesday',
             'send_time' => '09:00',
-            'default_from_name' => 'Marine.ng',
-            'default_from_email' => 'newsletter@marine.ng',
+            'default_from_name' => 'Marine.africa',
+            'default_from_email' => 'newsletter@marine.africa',
             'unsubscribe_link' => true,
             'track_opens' => true,
             'track_clicks' => true
@@ -407,7 +407,7 @@ class NewsletterController extends Controller
 
         // Header
         $content .= '<div style="background: #1f2937; padding: 20px; text-align: center;">';
-        $content .= '<h1 style="color: white; margin: 0;">Marine.ng Featured Listings</h1>';
+        $content .= '<h1 style="color: white; margin: 0;">Marine.africa Featured Listings</h1>';
         $content .= '</div>';
 
         // Promotional text
@@ -447,7 +447,7 @@ class NewsletterController extends Controller
             $content .= '</div>';
 
             // CTA Button
-            $listingUrl = config('app.frontend_url', 'https://marine.ng') . '/equipment/' . $listing->id;
+            $listingUrl = config('app.frontend_url', 'https://marine.africa') . '/equipment/' . $listing->id;
             $content .= '<a href="' . $listingUrl . '" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Details</a>';
 
             $content .= '</div>';
@@ -455,8 +455,8 @@ class NewsletterController extends Controller
 
         // Footer
         $content .= '<div style="text-align: center; padding: 20px; color: #6b7280; font-size: 14px;">';
-        $content .= '<p>Visit <a href="' . config('app.frontend_url', 'https://marine.ng') . '" style="color: #3b82f6;">Marine.ng</a> for more equipment listings</p>';
-        $content .= '<p style="font-size: 12px; margin-top: 10px;">You received this email because you are registered on Marine.ng</p>';
+        $content .= '<p>Visit <a href="' . config('app.frontend_url', 'https://marine.africa') . '" style="color: #3b82f6;">Marine.africa</a> for more equipment listings</p>';
+        $content .= '<p style="font-size: 12px; margin-top: 10px;">You received this email because you are registered on Marine.africa</p>';
         $content .= '</div>';
 
         $content .= '</div></div>';

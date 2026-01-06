@@ -330,8 +330,8 @@ class NewsletterController extends Controller
                 'frequency' => 'monthly',
                 'day_of_week' => 'tuesday',
                 'send_time' => '09:00',
-                'default_from_name' => 'Marine.ng',
-                'default_from_email' => 'newsletter@marine.ng',
+                'default_from_name' => 'Marine.africa',
+                'default_from_email' => 'newsletter@marine.africa',
                 'unsubscribe_link' => true,
                 'track_opens' => true,
                 'track_clicks' => true

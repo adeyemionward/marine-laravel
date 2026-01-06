@@ -70,7 +70,7 @@ class InvoiceWorkflowService
                         'total' => $baseAmount
                     ]
                 ],
-                'notes' => 'Welcome to Marine.ng! Please complete your payment to activate your seller account.',
+                'notes' => 'Welcome to Marine.africa! Please complete your payment to activate your seller account.',
                 'terms_and_conditions' => $this->getSellerTermsAndConditions(),
                 'company_name' => $application->business_name,
                 'generated_by' => $approvedBy->id,
@@ -369,13 +369,13 @@ class InvoiceWorkflowService
      */
     private function getSellerTermsAndConditions(): string
     {
-        return "By paying this invoice, you agree to Marine.ng's seller terms and conditions:\n\n" .
+        return "By paying this invoice, you agree to Marine.africa's seller terms and conditions:\n\n" .
                "1. Monthly subscription fee is required to maintain active seller status\n" .
                "2. Late payments may result in temporary suspension of seller privileges\n" .
-               "3. All listings must comply with Marine.ng quality standards\n" .
+               "3. All listings must comply with Marine.africa quality standards\n" .
                "4. Commission fees apply to completed transactions\n" .
                "5. Subscription auto-renews unless cancelled\n\n" .
-               "For full terms, visit: https://marine.ng/seller-terms";
+               "For full terms, visit: https://marine.africa/seller-terms";
     }
 
     /**
@@ -389,7 +389,7 @@ class InvoiceWorkflowService
                "3. Subscription will auto-renew monthly unless cancelled\n" .
                "4. All active listings will be hidden if payment is not received\n" .
                "5. Late fees may apply for payments received after the due date\n\n" .
-               "Manage your subscription at: https://marine.ng/user-dashboard";
+               "Manage your subscription at: https://marine.africa/user-dashboard";
     }
 
     /**

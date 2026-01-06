@@ -87,14 +87,46 @@ Route::get('/debug-messages', function () {
 
 // Public routes
 Route::prefix('v1')->group(function () {
-    // Health check endpoint
+    // Health check endpoint for CI/CD and monitoring
     Route::get('/health', function () {
-        return response()->json([
-            'status' => 'ok',
-            'message' => 'API is healthy',
-            'timestamp' => now(),
-            'version' => '1.0.0'
-        ]);
+        try {
+            // Check database connection
+            $dbStatus = 'connected';
+            try {
+                \DB::connection()->getPdo();
+            } catch (\Exception $e) {
+                $dbStatus = 'disconnected';
+            }
+
+            // Check cache
+            $cacheStatus = 'ok';
+            try {
+                \Cache::put('health_check', 'test', 5);
+                \Cache::get('health_check');
+            } catch (\Exception $e) {
+                $cacheStatus = 'error';
+            }
+
+            return response()->json([
+                'status' => 'ok',
+                'message' => 'API is healthy',
+                'timestamp' => now()->toIso8601String(),
+                'version' => '1.0.0',
+                'environment' => app()->environment(),
+                'services' => [
+                    'database' => $dbStatus,
+                    'cache' => $cacheStatus,
+                ],
+                'git_commit' => env('GIT_COMMIT', 'unknown'),
+                'deployed_at' => env('DEPLOYED_AT', 'unknown'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Health check failed',
+                'error' => app()->environment('local') ? $e->getMessage() : 'Internal error',
+            ], 500);
+        }
     });
 
     // Authentication routes
@@ -217,6 +249,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/{listingId}/reviews/{reviewId}/helpful', [EquipmentReviewController::class, 'markHelpful']);
     Route::post('/{listingId}/reviews/{reviewId}/not-helpful', [EquipmentReviewController::class, 'markNotHelpful']);
     Route::post('/{listingId}/reviews/{reviewId}/reply', [EquipmentReviewController::class, 'sellerReply']);
+    Route::patch('/{id}/status', [EquipmentController::class, 'updateStatus']);
     Route::post('/{id}/sold', [EquipmentController::class, 'markSold']);
     Route::post('/{id}/view', [EquipmentController::class, 'trackView']);
     Route::get('/{id}/analytics', [EquipmentController::class, 'analytics']);
@@ -233,9 +266,6 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/destroyReview/{id}', [EquipmentController::class, 'destroyReview']);
     Route::post('/markHelpful/{id}', [EquipmentController::class, 'markHelpful']);
     Route::post('/markNotHelpful/{id}', [EquipmentController::class, 'markNotHelpful']);
-
-    // Dynamic numeric route last
-    Route::get('/{id}', [EquipmentController::class, 'show'])->whereNumber('id');
 });
 
 
@@ -340,24 +370,25 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         // Listing management
         Route::get('/listings', [AdminController::class, 'listings']);
+
+        // Specific routes MUST come before parameterized routes
+        Route::get('/listings/moderation', [AdminController::class, 'getListingsForModeration']);
+        Route::get('/listings/moderation/stats', [AdminController::class, 'getModerationStats']);
+        Route::post('/listings/cleanup', [AdminController::class, 'runAutoCleanup']);
+        Route::put('/listings/priority/bulk', [AdminController::class, 'bulkUpdatePriority']);
+        Route::get('/listings/priority/stats', [AdminController::class, 'getPriorityStatistics']);
+        Route::get('/listings/featured/stats', [AdminController::class, 'getFeaturedStatistics']);
+
+        // Parameterized routes come AFTER specific routes
+        Route::get('/listings/{id}', [AdminController::class, 'showListing']); // Admin can view any listing status
         Route::post('/listings/{id}/approve', [AdminController::class, 'approveListing']);
         Route::post('/listings/{id}/reject', [AdminController::class, 'rejectListing']);
         Route::delete('/listings/{id}', [AdminController::class, 'deleteListing']);
         Route::post('/listings/{id}/feature', [AdminController::class, 'featureListing']);
-
-        // Listing moderation
-        Route::get('/listings/moderation', [AdminController::class, 'getListingsForModeration']);
         Route::post('/listings/{id}/moderate', [AdminController::class, 'moderateListing']);
         Route::post('/listings/{id}/extend', [AdminController::class, 'extendListingExpiration']);
-        Route::post('/listings/cleanup', [AdminController::class, 'runAutoCleanup']);
-        Route::get('/listings/moderation/stats', [AdminController::class, 'getModerationStats']);
-
-        // Priority and featured listing management
         Route::put('/listings/{id}/priority', [AdminController::class, 'updateListingPriority']);
         Route::put('/listings/{id}/featured', [AdminController::class, 'updateFeaturedStatus']);
-        Route::put('/listings/priority/bulk', [AdminController::class, 'bulkUpdatePriority']);
-        Route::get('/listings/priority/stats', [AdminController::class, 'getPriorityStatistics']);
-        Route::get('/listings/featured/stats', [AdminController::class, 'getFeaturedStatistics']);
 
         // User management
         Route::get('/users', [AdminController::class, 'users']);

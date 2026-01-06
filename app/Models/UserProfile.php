@@ -18,12 +18,15 @@ class UserProfile extends Model
         'full_name',
         'role',
         'is_active',
+        'ban_reason',
+        'banned_until',
         'company_name',
         'company_description',
         'bio',
         'website',
         'linkedin',
         'phone',
+        'phone_number',
         'address',
         'city',
         'state',
@@ -44,11 +47,16 @@ class UserProfile extends Model
         'business_type',
     ];
 
+    protected $appends = [
+        'avatar_url',
+    ];
+
     protected $casts = [
         'role' => UserRole::class,
         'is_active' => 'boolean',
         'is_verified' => 'boolean',
         'two_factor_enabled' => 'boolean',
+        'banned_until' => 'datetime',
         'verification_documents' => 'array',
         'two_factor_backup_codes' => 'array',
         'email_verified_at' => 'datetime',

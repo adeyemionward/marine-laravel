@@ -8,6 +8,7 @@ enum ListingStatus: string
     case PENDING = 'pending';
     case ACTIVE = 'active';
     case SOLD = 'sold';
+    case HIRED = 'hired';
     case ARCHIVED = 'archived';
     case REJECTED = 'rejected';
 
@@ -23,6 +24,7 @@ enum ListingStatus: string
             self::PENDING => 'Pending Review',
             self::ACTIVE => 'Active',
             self::SOLD => 'Sold',
+            self::HIRED => 'Hired',
             self::ARCHIVED => 'Archived',
             self::REJECTED => 'Rejected',
         };

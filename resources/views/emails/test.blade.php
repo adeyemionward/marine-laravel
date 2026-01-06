@@ -51,7 +51,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Marine.ng</h1>
+            <h1>Marine.africa</h1>
             <h2>SMTP Configuration Test</h2>
         </div>
 
@@ -62,22 +62,22 @@
 
             <p>Hello,</p>
 
-            <p>This is a test email from Marine.ng to verify that your SMTP email configuration is working correctly.</p>
+            <p>This is a test email from Marine.africa to verify that your SMTP email configuration is working correctly.</p>
 
             <p><strong>Test Details:</strong></p>
             <ul>
                 <li>Test sent at: {{ now()->format('Y-m-d H:i:s') }}</li>
-                <li>Application: Marine.ng Admin Panel</li>
+                <li>Application: Marine.africa Admin Panel</li>
                 <li>Purpose: SMTP Configuration Verification</li>
             </ul>
 
-            <p>If you received this email, your SMTP configuration is working properly and you can now send newsletters and other email communications through your Marine.ng platform.</p>
+            <p>If you received this email, your SMTP configuration is working properly and you can now send newsletters and other email communications through your Marine.africa platform.</p>
 
-            <p>Thank you for using Marine.ng!</p>
+            <p>Thank you for using Marine.africa!</p>
         </div>
 
         <div class="footer">
-            <p>&copy; {{ date('Y') }} Marine.ng - Africa's Premier Marine Equipment Marketplace</p>
+            <p>&copy; {{ date('Y') }} Marine.africa - Africa's Premier Marine Equipment Marketplace</p>
             <p>This is an automated test email. Please do not reply to this message.</p>
         </div>
     </div>

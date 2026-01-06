@@ -20,7 +20,7 @@ class TestBannerSeeder extends Seeder
             $this->command->info('No users found. Creating a test user for banners...');
             $user = User::create([
                 'name' => 'Test User',
-                'email' => 'test@marine.ng',
+                'email' => 'test@marine.africa',
                 'password' => bcrypt('password'),
                 'email_verified_at' => now(),
             ]);
@@ -92,7 +92,7 @@ class TestBannerSeeder extends Seeder
 
             // Footer Banner
             [
-                'title' => 'Join Marine.ng Community - 10,000+ Members',
+                'title' => 'Join Marine.africa Community - 10,000+ Members',
                 'description' => 'Connect with marine enthusiasts and professionals across Africa',
                 'media_type' => 'image',
                 'media_url' => 'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=800&h=80&fit=crop',

@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 class EquipmentController extends Controller
 {
 
@@ -25,25 +27,36 @@ class EquipmentController extends Controller
             $query = EquipmentListing::with([
                 'seller.profile',
                 'seller.sellerProfile',
+                'sellerProfile', // Add this
                 'category',
                 'seller' => function($q) {
                     $q->withCount([
                         'listings as listings_count' => function($query) {
-                            $query->where('status', 'active');
+                            $query->whereNotIn('status', ['archived', 'rejected']);
                         },
-                        'sales as sales_count' => function($query) {
-                            $query->where('status', 'completed');
-                        }
+                        // 'sales as sales_count' => function($query) {
+                        //     $query->where('status', 'completed');
+                        // }
                     ]);
                 }
             ])
                 ->active()
-                ->published()
+                // ->published()
                 ->notExpired();
 
             // Filter by category
             if ($request->filled('category_id')) {
                 $query->byCategory($request->category_id);
+            }
+
+            // Filter by listing type (sale, lease, rent)
+            if ($request->filled('listing_type')) {
+                $query->where('listing_type', $request->listing_type);
+            }
+
+            // Filter by available for lease (backward compatibility)
+            if ($request->filled('available_for_lease') && $request->boolean('available_for_lease')) {
+                $query->where('listing_type', 'lease');
             }
 
             // Filter by location
@@ -99,7 +112,7 @@ class EquipmentController extends Controller
                 // For similar equipment requests, just take the specified number
                 $limit = min(20, max(1, (int) $request->get('limit', 8)));
                 $equipment = $query->limit($limit)->get();
-                
+
                 return response()->json([
                     'success' => true,
                     'data' => EquipmentListingResource::collection($equipment),
@@ -171,7 +184,7 @@ class EquipmentController extends Controller
     {
         try {
             $limit = min(20, max(1, (int) $request->get('limit', 12)));
-            
+
             $equipment = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
@@ -212,7 +225,7 @@ class EquipmentController extends Controller
 
             $query = $request->get('q');
             $perPage = min(50, max(1, (int) $request->get('per_page', 12)));
-            
+
             $equipment = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
                 ->active()
                 ->published()
@@ -254,7 +267,7 @@ class EquipmentController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
-            \Log::info('EquipmentController::store START', [
+            Log::info('EquipmentController::store START', [
                 'request_data' => $request->except(['images']),
                 'has_images' => $request->hasFile('images')
             ]);
@@ -267,7 +280,7 @@ class EquipmentController extends Controller
             }
 
             // Log validation data for debugging
-            \Log::info('Validation data', [
+            Log::info('Validation data', [
                 'price' => $request->price,
                 'is_poa' => $request->boolean('is_poa'),
                 'condition' => $request->condition
@@ -295,6 +308,16 @@ class EquipmentController extends Controller
                 'contact_email' => 'nullable|email',
                 'negotiable' => 'boolean',
                 'is_poa' => 'boolean',
+                // Lease-specific fields
+                'lease_price_daily' => 'nullable|numeric|min:0',
+                'lease_price_weekly' => 'nullable|numeric|min:0',
+                'lease_price_monthly' => 'nullable|numeric|min:0',
+                'lease_minimum_period' => 'nullable|integer|min:1',
+                'lease_security_deposit' => 'nullable|numeric|min:0',
+                'lease_maintenance_included' => 'nullable|boolean',
+                'lease_insurance_required' => 'nullable|boolean',
+                'lease_operator_license_required' => 'nullable|boolean',
+                'lease_commercial_use_allowed' => 'nullable|boolean',
             ]);
 
             // Additional validation: Price is required for 'sale' listings if not POA
@@ -323,7 +346,7 @@ class EquipmentController extends Controller
                 ], 400);
             }
 
-            \Log::info('User subscription check', [
+            Log::info('User subscription check', [
                 'user_id' => $user->id,
                 'profile_id' => $userProfile->id,
                 'has_active_subscription' => method_exists($user, 'activeSubscription')
@@ -334,7 +357,7 @@ class EquipmentController extends Controller
             $subscription = method_exists($user, 'activeSubscription') ? $user->activeSubscription() : null;
 
             if (!$subscription) {
-                \Log::warning('No active subscription found, allowing listing creation anyway');
+                Log::warning('No active subscription found, allowing listing creation anyway');
                 // Create a mock subscription object for limits
                 $subscription = (object)[
                     'plan' => (object)[
@@ -348,8 +371,8 @@ class EquipmentController extends Controller
             $currentListings = EquipmentListing::where('seller_id', $user->id)
                 ->where('status', 'active')
                 ->count();
-            
-            if ($subscription->plan->max_listings !== -1 && 
+
+            if ($subscription->plan->max_listings !== -1 &&
                 $currentListings >= $subscription->plan->max_listings) {
                 return response()->json([
                     'success' => false,
@@ -363,7 +386,7 @@ class EquipmentController extends Controller
                 $maxImages = $subscription->plan->max_images_per_listing ?? 10;
                 $images = array_slice($request->images, 0, $maxImages);
 
-                \Log::info('Processing images', [
+                Log::info('Processing images', [
                     'images_count' => count($images),
                     'first_image_type' => gettype($images[0] ?? null)
                 ]);
@@ -412,6 +435,7 @@ class EquipmentController extends Controller
                 'description' => $request->description,
                 'price' => $price,
                 'category_id' => $request->category_id,
+                'listing_type' => $request->listing_type ?? 'sale',
                 'condition' => $request->condition,
                 'brand' => $request->brand,
                 'model' => $request->model,
@@ -423,8 +447,18 @@ class EquipmentController extends Controller
                 'contact_phone' => $request->contact_phone,
                 'contact_email' => $request->contact_email ?? $user->email,
                 'negotiable' => $request->boolean('negotiable', false),
-                'status' => 'active',
-                'published_at' => now(),
+                // Lease-specific fields
+                'lease_price_daily' => $request->lease_price_daily,
+                'lease_price_weekly' => $request->lease_price_weekly,
+                'lease_price_monthly' => $request->lease_price_monthly,
+                'lease_minimum_period' => $request->lease_minimum_period,
+                'lease_security_deposit' => $request->lease_security_deposit,
+                'lease_maintenance_included' => $request->boolean('lease_maintenance_included', false),
+                'lease_insurance_required' => $request->boolean('lease_insurance_required', false),
+                'lease_operator_license_required' => $request->boolean('lease_operator_license_required', false),
+                'lease_commercial_use_allowed' => $request->boolean('lease_commercial_use_allowed', false),
+                'status' => 'pending', // Changed from 'active' - requires admin approval
+                'published_at' => null, // Will be set when admin approves
             ]);
 
             // Update seller profile listing count
@@ -452,18 +486,18 @@ class EquipmentController extends Controller
     public function show($id)
     {
         try {
-            $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
+            $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'sellerProfile', 'category'])
             ->active()
-            ->published()
+            // ->published()
             ->notExpired()
             ->where('id', $id)
             ->first();
-            
+
 
             // Increment view count
            // $listing->incrementViewCount();
-            
-            
+
+
 if (!$listing) {
     return response()->json([
         'success' => false,
@@ -490,7 +524,7 @@ if (!$listing) {
     public function update(Request $request, int $id): JsonResponse
     {
         try {
-            \Log::info('Equipment update request received', [
+            Log::info('Equipment update request received', [
                 'id' => $id,
                 'user_id' => $request->user()?->id,
                 'data' => $request->except(['images'])
@@ -526,6 +560,16 @@ if (!$listing) {
                 'delivery_fee' => 'nullable|numeric',
                 'allows_inspection' => 'nullable|boolean',
                 'hide_address' => 'nullable|boolean',
+                // Lease-specific fields
+                'lease_price_daily' => 'nullable|numeric|min:0',
+                'lease_price_weekly' => 'nullable|numeric|min:0',
+                'lease_price_monthly' => 'nullable|numeric|min:0',
+                'lease_minimum_period' => 'nullable|integer|min:1',
+                'lease_security_deposit' => 'nullable|numeric|min:0',
+                'lease_maintenance_included' => 'nullable|boolean',
+                'lease_insurance_required' => 'nullable|boolean',
+                'lease_operator_license_required' => 'nullable|boolean',
+                'lease_commercial_use_allowed' => 'nullable|boolean',
             ]);
 
             $user = $request->user();
@@ -540,13 +584,17 @@ if (!$listing) {
 
             // Prepare update data
             $updateData = $request->only([
-                'title', 'description', 'price', 'category_id', 'condition',
+                'title', 'description', 'price', 'category_id', 'listing_type', 'condition',
                 'brand', 'model', 'year', 'location_state', 'location_city', 'location_address',
                 'specifications', 'features', 'contact_phone', 'contact_email', 'contact_whatsapp',
                 'contact_methods', 'availability_hours', 'is_price_negotiable', 'is_poa',
                 'delivery_available', 'delivery_radius', 'delivery_fee', 'allows_inspection',
                 'hide_address', 'power_source', 'min_price', 'payment_methods', 'pricing_notes',
-                'currency', 'priority_tier'
+                'currency', 'priority_tier',
+                // Lease-specific fields
+                'lease_price_daily', 'lease_price_weekly', 'lease_price_monthly',
+                'lease_minimum_period', 'lease_security_deposit', 'lease_maintenance_included',
+                'lease_insurance_required', 'lease_operator_license_required', 'lease_commercial_use_allowed'
             ]);
 
             // Handle images - can be array of image data (already uploaded) or file uploads
@@ -581,7 +629,7 @@ if (!$listing) {
 
             $listing->update($updateData);
 
-            \Log::info('Equipment update successful', ['id' => $id]);
+            Log::info('Equipment update successful', ['id' => $id]);
 
             return response()->json([
                 'success' => true,
@@ -589,7 +637,7 @@ if (!$listing) {
                 'data' => $listing->load(['category', 'seller']),
             ]);
         } catch (\Exception $e) {
-            \Log::error('Equipment update failed', [
+            Log::error('Equipment update failed', [
                 'id' => $id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -598,6 +646,66 @@ if (!$listing) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update listing',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Update the status of an equipment listing.
+     */
+    public function updateStatus(Request $request, int $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'status' => 'required|string|in:sold,hired,active',
+                'next_available_date' => 'nullable|date',
+            ]);
+
+            $user = $request->user();
+            $newStatus = $validated['status'];
+            $nextAvailableDate = $validated['next_available_date'] ?? null;
+
+            // Super admin can update any listing, others can only update their own
+            if ($user->isSuperAdmin() || $user->isAdmin()) {
+                $listing = EquipmentListing::findOrFail($id);
+            } else {
+                $listing = EquipmentListing::where('seller_id', $user->id)
+                    ->findOrFail($id);
+            }
+
+            switch ($newStatus) {
+                case 'sold':
+                    $listing->markAsSold($nextAvailableDate);
+                    break;
+                case 'hired':
+                    $listing->markAsHired($nextAvailableDate);
+                    break;
+                case 'active':
+                    $listing->markAsAvailable();
+                    break;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Listing status updated successfully.',
+                'data' => new EquipmentListingResource($listing),
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Listing not found or you do not have permission to update it.',
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Failed to update listing status', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update listing status.',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -656,7 +764,7 @@ if (!$listing) {
     {
         try {
             $isFavorited = rand(0, 1) === 1;
-            
+
             return response()->json([
                 'success' => true,
                 'message' => $isFavorited ? 'Added to favorites' : 'Removed from favorites',
@@ -680,7 +788,7 @@ if (!$listing) {
             $validator = Validator::make($request->all(), [
                 'listing_id'   => 'required|integer',
             ]);
-        
+
             if ($validator->fails()) {
                 return response()->json([
                     'message' => 'Validation failed',
@@ -738,7 +846,7 @@ if (!$listing) {
                 return response()->json([
                     'message' => 'Item not found in favorites',
                     'status'=>true,
-                    
+
                 ], 200);
             }
 
@@ -876,17 +984,17 @@ if (!$listing) {
 
             $maxImages = $subscription->plan->max_images_per_listing ?? 5;
             $images = array_slice($request->file('images'), 0, $maxImages);
-            
+
             $imagePaths = [];
             foreach ($images as $image) {
                 $path = $image->store('listings', 'public');
                 $imagePaths[] = $path;
             }
-            
+
             // Merge with existing images or replace them
             $existingImages = $listing->images ?? [];
             $allImages = array_merge($existingImages, $imagePaths);
-            
+
             // Limit total images
             $listing->images = array_slice($allImages, 0, $maxImages);
             $listing->save();
@@ -1048,7 +1156,7 @@ if (!$listing) {
                 ]
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to fetch reviews: ' . $e->getMessage());
+            Log::error('Failed to fetch reviews: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch reviews',
@@ -1137,7 +1245,7 @@ if (!$listing) {
                 'data' => $review
             ], 201);
         } catch (\Exception $e) {
-            \Log::error('Failed to add review: ' . $e->getMessage());
+            Log::error('Failed to add review: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Failed to submit review. Please try again.',
                 'status' => false,
@@ -1202,7 +1310,7 @@ if (!$listing) {
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to mark review as helpful: ' . $e->getMessage());
+            Log::error('Failed to mark review as helpful: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to mark review as helpful',
@@ -1229,7 +1337,7 @@ if (!$listing) {
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to mark review as not helpful: ' . $e->getMessage());
+            Log::error('Failed to mark review as not helpful: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to mark review as not helpful',

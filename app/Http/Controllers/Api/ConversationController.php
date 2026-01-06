@@ -42,7 +42,7 @@ class ConversationController extends Controller
                     ->whereNull('read_at')
                     ->count();
 
-                // Handle images - check if it's already an array or a JSON string
+                // Handle images safely
                 $images = $conversation->listing->images;
                 if (is_string($images)) {
                     $images = json_decode($images, true) ?? [];
@@ -65,7 +65,7 @@ class ConversationController extends Controller
                         'company' => $otherParty->profile->company_name ?? null,
                         'role' => $otherParty->role->name ?? 'user',
                         'avatar' => $otherParty->profile->avatar_url ?? null,
-                        'isOnline' => false, // You can implement real online status later
+                        'isOnline' => false,
                         'isVerified' => $otherParty->profile->is_verified ?? false,
                     ],
                     'lastMessage' => $conversation->lastMessage ? [
@@ -144,7 +144,12 @@ class ConversationController extends Controller
                 $sender = Auth::user();
 
                 if ($receiver && $receiver->email) {
-                    Mail::to($receiver->email)->send(new NewMessageNotification($sender, $message));
+                    try {
+                        Mail::to($receiver->email)->send(new NewMessageNotification($sender, $message));
+                    } catch (\Exception $mailEx) {
+                        // Log mail error but don't fail the request
+                        \Log::error('Mail failed: ' . $mailEx->getMessage());
+                    }
                 }
 
                 // Update conversation timestamp
@@ -153,6 +158,14 @@ class ConversationController extends Controller
 
             // Load the conversation with relationships
             $conversation->load(['buyer', 'seller', 'listing', 'messages.sender']);
+
+            // Handle images safely
+            $images = $conversation->listing->images;
+            if (is_string($images)) {
+                $images = json_decode($images, true) ?? [];
+            } elseif (!is_array($images)) {
+                $images = [];
+            }
 
             return response()->json([
                 'success' => true,
@@ -164,7 +177,7 @@ class ConversationController extends Controller
                         'title' => $conversation->listing->title,
                         'price' => $conversation->listing->price,
                         'currency' => $conversation->listing->currency,
-                        'images' => json_decode($conversation->listing->images ?? '[]', true),
+                        'images' => $images,
                     ],
                     'buyer' => [
                         'id' => $conversation->buyer->id,
@@ -232,7 +245,7 @@ class ConversationController extends Controller
                 ? $conversation->seller
                 : $conversation->buyer;
 
-            // Handle images - check if it's already an array or a JSON string
+            // Handle images safely
             $images = $conversation->listing->images;
             if (is_string($images)) {
                 $images = json_decode($images, true) ?? [];
@@ -272,7 +285,7 @@ class ConversationController extends Controller
                             'created_at' => $message->created_at,
                         ];
                     }),
-                    'unreadCount' => 0, // All messages are now read since we marked them
+                    'unreadCount' => 0,
                     'created_at' => $conversation->created_at,
                     'updated_at' => $conversation->updated_at,
                 ],
@@ -322,7 +335,6 @@ class ConversationController extends Controller
                 'type' => $validated['message_type'] ?? 'text',
             ];
 
-            // Add offer data if this is an offer message
             if (isset($validated['offer_amount'])) {
                 $messageData['offer_price'] = $validated['offer_amount'];
                 $messageData['offer_currency'] = $validated['offer_currency'] ?? 'NGN';
@@ -337,35 +349,22 @@ class ConversationController extends Controller
 
             $receiver = User::find($receiverId);
 
-            // Send email notification to the other participant
             if ($receiver && $receiver->email) {
-                Mail::to($receiver->email)->send(
-                    new NewMessageNotification($sender, $message)
-                );
+                try {
+                    Mail::to($receiver->email)->send(new NewMessageNotification($sender, $message));
+                } catch (\Exception $mailEx) {
+                    \Log::error('Mail failed: ' . $mailEx->getMessage());
+                }
             }
 
-            // Update conversation timestamp
             $conversation->touch();
-
-            $sender = Auth::user();
-            $receiverId = $conversation->buyer_id == $userId
-                ? $conversation->seller_id
-                : $conversation->buyer_id;
-
-            $receiver = User::find($receiverId);
-
-            // Send email notification to the other participant
-            if ($receiver && $receiver->email) {
-                Mail::to($receiver->email)->send(
-                    new NewMessageNotification($sender, $message)
-                );
-            }
-
-            // Load sender relationship
             $message->load('sender');
 
-            // Broadcast the message to other users in the conversation
-            broadcast(new MessageSent($message));
+            try {
+                broadcast(new MessageSent($message));
+            } catch (\Exception $broadcastEx) {
+                \Log::error('Broadcast failed: ' . $broadcastEx->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -397,7 +396,7 @@ class ConversationController extends Controller
     public function markAsRead(Request $request, $id): JsonResponse
     {
         try {
-            $userId = Auth::user()->profile->id;
+            $userId = Auth::user()->id;
 
             $conversation = Conversation::where('id', $id)
                 ->where(function ($query) use ($userId) {
@@ -413,7 +412,6 @@ class ConversationController extends Controller
                 ], 404);
             }
 
-            // Mark all unread messages as read for the current user
             $updatedCount = $conversation->messages()
                 ->where('sender_id', '!=', $userId)
                 ->whereNull('read_at')
@@ -441,7 +439,7 @@ class ConversationController extends Controller
     public function archive($id): JsonResponse
     {
         try {
-            $userId = Auth::user()->profile->id;
+            $userId = Auth::user()->id;
 
             $conversation = Conversation::where('id', $id)
                 ->where(function ($query) use ($userId) {
@@ -478,7 +476,8 @@ class ConversationController extends Controller
     public function getUnreadCount(): JsonResponse
     {
         try {
-            $userId = Auth::user()->profile->id;
+            $user = Auth::user();
+            $userId = $user->id;
 
             $unreadCount = Message::whereHas('conversation', function ($query) use ($userId) {
                 $query->where(function ($q) use ($userId) {

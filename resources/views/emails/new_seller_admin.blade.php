@@ -18,6 +18,6 @@ Business: {{ $application->business_name }}
 <p>Please log in to the admin dashboard to review this application.</p>
 
 <div class="footer">
-    This is an automated notification from Marine.ng.
+    This is an automated notification from Marine.africa.
 </div>
 

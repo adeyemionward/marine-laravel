@@ -45,7 +45,7 @@ return new class extends Migration
         $settings = [
             [
                 'key' => 'site_name',
-                'value' => 'Marine.ng',
+                'value' => 'Marine.africa',
                 'type' => 'string',
                 'description' => 'The name of the website',
                 'is_public' => true,
@@ -59,7 +59,7 @@ return new class extends Migration
             ],
             [
                 'key' => 'contact_email',
-                'value' => 'info@marine.ng',
+                'value' => 'info@marine.africa',
                 'type' => 'string',
                 'description' => 'Main contact email',
                 'is_public' => true,

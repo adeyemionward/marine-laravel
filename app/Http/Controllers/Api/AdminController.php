@@ -99,6 +99,8 @@ class AdminController extends Controller
             $listing->update([
                 'status' => 'rejected',
                 'rejection_reason' => $validated['reason'] ?? null,
+                'published_at' => null, // Clear published date when rejecting
+                'is_verified' => false, // Remove verification when rejecting
             ]);
 
             return response()->json([
@@ -111,6 +113,26 @@ class AdminController extends Controller
                 'message' => 'Failed to reject listing',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    public function showListing($id): JsonResponse
+    {
+        try {
+            // Admin can view listing with ANY status (pending, active, rejected, etc.)
+            $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
+                ->findOrFail($id);
+
+            return response()->json([
+                'success' => true,
+                'data' => new EquipmentListingResource($listing),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Listing not found',
+                'error' => $e->getMessage(),
+            ], 404);
         }
     }
 
@@ -306,7 +328,7 @@ class AdminController extends Controller
 
             $analytics = [
                 'overview' => [
-                    'total_listings' => EquipmentListing::count(),
+                    'total_listings' => EquipmentListing::whereNotIn('status', ['archived', 'rejected'])->count(),
                     'active_listings' => EquipmentListing::where('status', 'active')->count(),
                     'total_users' => User::count(),
                     'verified_users' => UserProfile::where('is_verified', true)->count(),
@@ -834,7 +856,7 @@ class AdminController extends Controller
 
 
             // ✅ Send admin email
-            Mail::to('info@marine.ng')->send(  new AdminSellerApprovedMail($application, $validated['admin_notes'] ?? null));
+            Mail::to('info@marine.africa')->send(  new AdminSellerApprovedMail($application, $validated['admin_notes'] ?? null));
 
             $response = [
                 'success' => true,
@@ -1068,13 +1090,13 @@ class AdminController extends Controller
      */
     private function getSellerTermsAndConditions(): string
     {
-        return "By paying this invoice, you agree to Marine.ng's seller terms and conditions:\n\n" .
+        return "By paying this invoice, you agree to Marine.africa's seller terms and conditions:\n\n" .
                "1. Monthly subscription fee is required to maintain active seller status\n" .
                "2. Late payments may result in temporary suspension of seller privileges\n" .
-               "3. All listings must comply with Marine.ng quality standards\n" .
+               "3. All listings must comply with Marine.africa quality standards\n" .
                "4. Commission fees apply to completed transactions\n" .
                "5. Subscription auto-renews unless cancelled\n\n" .
-               "For full terms, visit: https://marine.ng/seller-terms";
+               "For full terms, visit: https://marine.africa/seller-terms";
     }
 
     public function rejectSellerApplication(Request $request, $id): JsonResponse
@@ -2388,15 +2410,21 @@ class AdminController extends Controller
     public function getListingsForModeration(Request $request): JsonResponse
     {
         try {
-            $query = EquipmentListing::with(['category', 'seller'])
-                ->orderBy('created_at', 'desc');
+            $query = EquipmentListing::with(['category', 'seller']);
+
+            // Apply category filter
+            if ($request->has('category_id') && $request->category_id !== '' && $request->category_id !== 'all') {
+                $query->where('category_id', $request->category_id);
+            }
 
             // Apply status filter
             if ($request->has('status') && $request->status !== 'all' && $request->status !== null) {
                 $query->where('status', $request->status);
             } else {
                 // By default, exclude archived listings unless explicitly requested
-                $query->where('status', '!=', 'archived');
+                if (!$request->has('status') || $request->status !== 'archived') {
+                    $query->where('status', '!=', 'archived');
+                }
             }
 
             // Apply expiration filter
@@ -2413,6 +2441,19 @@ class AdminController extends Controller
                         break;
                 }
             }
+            
+            // Apply sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+
+            // Sanitize sort_by to prevent SQL injection
+            $validSortColumns = ['created_at', 'updated_at', 'title', 'price'];
+            if (in_array($sortBy, $validSortColumns)) {
+                $query->orderBy($sortBy, $sortOrder);
+            } else {
+                $query->orderBy('created_at', 'desc');
+            }
+
 
             // Allow customizable pagination
             $perPage = min(100, max(1, (int) $request->get('per_page', 24)));
@@ -2441,9 +2482,11 @@ class AdminController extends Controller
     public function moderateListing(Request $request, $id): JsonResponse
     {
         try {
+            // Accept extended set of moderation actions used by frontend UI
             $validated = $request->validate([
-                'action' => 'required|in:approve,reject,flag,suspend',
+                'action' => 'required|in:approve,reject,flag,suspend,pending,sold,archived,hired,hired_out,available,draft',
                 'reason' => 'nullable|string|max:500',
+                'available_date' => 'nullable|date|after_or_equal:today',
             ]);
 
             $listing = EquipmentListing::with(['category', 'seller'])->findOrFail($id);
@@ -2456,11 +2499,33 @@ class AdminController extends Controller
                 case 'reject':
                     $listing->status = 'rejected';
                     break;
-                case 'flag':
-                    $listing->status = 'flagged';
+                case 'pending':
+                    $listing->status = 'pending';
                     break;
-                case 'suspend':
-                    $listing->status = 'suspended';
+                case 'sold':
+                    $listing->status = 'sold';
+                    if (!$listing->sold_at) {
+                        $listing->sold_at = now();
+                    }
+                    break;
+                case 'archived':
+                    $listing->status = 'archived';
+                    break;
+                case 'hired':
+                case 'hired_out':
+                    $listing->status = 'hired';
+                    $listing->next_available_date = $validated['available_date'] ?? null;
+                    break;
+                // case 'available':
+                //     // treat available as active
+                //     $listing->status = 'active';
+                //     $listing->sold_at = null;
+                //     break;
+                case 'draft':
+                    $listing->status = 'draft';
+                    break;
+                default:
+                    // no-op
                     break;
             }
 
@@ -3952,13 +4017,13 @@ class AdminController extends Controller
     {
         try {
             $brandingSettings = [
-                'site_name' => SystemSetting::getValue('site_name', 'Marine.ng'),
+                'site_name' => SystemSetting::getValue('site_name', 'Marine.africa'),
                 'site_logo' => SystemSetting::getValue('site_logo', ''),
                 'site_favicon' => SystemSetting::getValue('site_favicon', ''),
                 'primary_color' => SystemSetting::getValue('primary_color', '#1e40af'),
                 'secondary_color' => SystemSetting::getValue('secondary_color', '#64748b'),
                 'footer_text' => SystemSetting::getValue('footer_text', ''),
-                'contact_email' => SystemSetting::getValue('contact_email', 'contact@marine.ng'),
+                'contact_email' => SystemSetting::getValue('contact_email', 'contact@marine.africa'),
                 'support_phone' => SystemSetting::getValue('support_phone', ''),
                 'social_facebook' => SystemSetting::getValue('social_facebook', ''),
                 'social_twitter' => SystemSetting::getValue('social_twitter', ''),

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,10 +15,11 @@ use App\Models\User;
 
 class EquipmentListing extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'seller_id',
+        'seller_profile_id',
         'category_id',
         'listing_type',
         'title',
@@ -30,6 +32,15 @@ class EquipmentListing extends Model
         'currency',
         'is_price_negotiable',
         'is_poa',
+        'lease_price_daily',
+        'lease_price_weekly',
+        'lease_price_monthly',
+        'lease_minimum_period',
+        'lease_security_deposit',
+        'lease_maintenance_included',
+        'lease_insurance_required',
+        'lease_operator_license_required',
+        'lease_commercial_use_allowed',
         'specifications',
         'features',
         'location_state',
@@ -60,6 +71,7 @@ class EquipmentListing extends Model
         'seo_description',
         'published_at',
         'expires_at',
+        'next_available_date',
     ];
 
     protected $casts = [
@@ -68,8 +80,16 @@ class EquipmentListing extends Model
         'listing_type' => ListingType::class,
         'price' => 'decimal:2',
         'delivery_fee' => 'decimal:2',
+        'lease_price_daily' => 'decimal:2',
+        'lease_price_weekly' => 'decimal:2',
+        'lease_price_monthly' => 'decimal:2',
+        'lease_security_deposit' => 'decimal:2',
         'is_price_negotiable' => 'boolean',
         'is_poa' => 'boolean',
+        'lease_maintenance_included' => 'boolean',
+        'lease_insurance_required' => 'boolean',
+        'lease_operator_license_required' => 'boolean',
+        'lease_commercial_use_allowed' => 'boolean',
         'hide_address' => 'boolean',
         'delivery_available' => 'boolean',
         'allows_inspection' => 'boolean',
@@ -85,16 +105,28 @@ class EquipmentListing extends Model
         'published_at' => 'datetime',
         'expires_at' => 'datetime',
         'featured_until' => 'datetime',
+        'next_available_date' => 'date',
         'year' => 'integer',
         'view_count' => 'integer',
         'inquiry_count' => 'integer',
         'delivery_radius' => 'integer',
+        'lease_minimum_period' => 'integer',
     ];
 
     // Relationships
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function sellerProfile(): BelongsTo
+    {
+        return $this->belongsTo(SellerProfile::class, 'seller_profile_id');
+    }
+
+    public function userProfile(): BelongsTo
+    {
+        return $this->belongsTo(UserProfile::class, 'seller_id');
     }
 
     public function category(): BelongsTo
@@ -156,7 +188,7 @@ class EquipmentListing extends Model
     public function scopeInLocation(Builder $query, string $state, string $city = null): Builder
     {
         $query->where('location_state', $state);
-        
+
         if ($city) {
             $query->where('location_city', $city);
         }
@@ -169,7 +201,7 @@ class EquipmentListing extends Model
         if ($min !== null) {
             $query->where('price', '>=', $min);
         }
-        
+
         if ($max !== null) {
             $query->where('price', '<=', $max);
         }
@@ -208,6 +240,36 @@ class EquipmentListing extends Model
         }
 
         return $this->currency . ' ' . number_format($this->price, 2);
+    }
+
+    /**
+     * Get formatted price display - shows lease rates for lease listings
+     */
+    public function getFormattedPriceDisplay(): string
+    {
+        // For lease listings, show lease rates instead of price
+        if ($this->listing_type == 'lease' || $this->listing_type == \App\Enums\ListingType::LEASE) {
+            $rates = [];
+
+            if ($this->lease_price_daily) {
+                $rates[] = $this->currency . ' ' . number_format($this->lease_price_daily, 2) . '/day';
+            }
+            if ($this->lease_price_weekly) {
+                $rates[] = $this->currency . ' ' . number_format($this->lease_price_weekly, 2) . '/week';
+            }
+            if ($this->lease_price_monthly) {
+                $rates[] = $this->currency . ' ' . number_format($this->lease_price_monthly, 2) . '/month';
+            }
+
+            if (!empty($rates)) {
+                return implode(' | ', $rates);
+            }
+
+            return 'Contact for Lease Rates';
+        }
+
+        // For sale listings, use the regular formatted price
+        return $this->formatted_price;
     }
 
     public function getPrimaryImageAttribute(): ?string
@@ -255,8 +317,33 @@ class EquipmentListing extends Model
         ]);
     }
 
-    public function markAsSold(): void
+    public function markAsSold(?string $nextAvailableDate = null): void
     {
-        $this->update(['status' => ListingStatus::SOLD]);
+        $data = ['status' => ListingStatus::SOLD];
+
+        if ($nextAvailableDate !== null) {
+            $data['next_available_date'] = $nextAvailableDate;
+        }
+
+        $this->update($data);
+    }
+
+    public function markAsHired(?string $nextAvailableDate = null): void
+    {
+        $data = ['status' => ListingStatus::HIRED];
+
+        if ($nextAvailableDate !== null) {
+            $data['next_available_date'] = $nextAvailableDate;
+        }
+
+        $this->update($data);
+    }
+
+    public function markAsAvailable(): void
+    {
+        $this->update([
+            'status' => ListingStatus::ACTIVE,
+            'next_available_date' => null,
+        ]);
     }
 }

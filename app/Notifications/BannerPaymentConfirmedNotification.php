@@ -31,7 +31,7 @@ class BannerPaymentConfirmedNotification extends Notification implements ShouldQ
             : 'Your banner is pending approval and will be live soon.';
 
         return (new MailMessage)
-            ->subject('✅ Payment Confirmed - Marine.ng Banner Advertisement')
+            ->subject('✅ Payment Confirmed - Marine.africa Banner Advertisement')
             ->greeting('Hello ' . $notifiable->name . '!')
             ->line('Your payment for banner advertisement has been successfully confirmed.')
             ->line('**Banner Details:**')
@@ -47,9 +47,9 @@ class BannerPaymentConfirmedNotification extends Notification implements ShouldQ
                 return $mail->line('Our team will review your banner and it will go live once approved (usually within 24 hours).');
             })
             ->action('View Your Banners', url('/user-dashboard'))
-            ->line('Thank you for advertising with Marine.ng!')
+            ->line('Thank you for advertising with Marine.africa!')
             ->salutation('Best regards,')
-            ->salutation('The Marine.ng Team');
+            ->salutation('The Marine.africa Team');
     }
 
     public function toArray($notifiable)

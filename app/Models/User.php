@@ -94,7 +94,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function hasPermissionTo($permission, $guardName = null): bool
     {
         // Super admin bypasses all permission checks
-        if ($this->email === 'admin@marine.ng' || $this->hasAnyRole(['super_admin', 'superadmin'], 'api')) {
+        if ($this->email === 'admin@marine.africa' || $this->hasAnyRole(['super_admin', 'superadmin'], 'api')) {
             return true;
         }
 
@@ -132,7 +132,16 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function isSeller(): bool
     {
-        return $this->hasRole('seller', $this->guard_name) && $this->sellerProfile()->exists();
+        // Check if seller role exists
+        $hasSellerRole = $this->hasRole('seller', $this->guard_name);
+
+        // Check if seller profile exists
+        // Use relationLoaded to avoid extra queries if already loaded
+        $hasSellerProfile = $this->relationLoaded('sellerProfile')
+            ? $this->sellerProfile !== null
+            : $this->sellerProfile()->exists();
+
+        return $hasSellerRole && $hasSellerProfile;
     }
 
     /**
@@ -281,7 +290,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function hasAccess($access)
     {
-        if ($this->email === 'admin@marine.ng') return true;
+        if ($this->email === 'admin@marine.africa') return true;
         if ($this->active_status != self::ACTIVE) return false;
 
         // Make sure the trait is present

@@ -27,7 +27,7 @@ class NewUserAdminNotification extends Mailable
      */
     public function build()
     {
-        return $this->subject('🆕 New User Registered on Marine.ng')
+        return $this->subject('🆕 New User Registered on Marine.africa')
                     ->view('emails.new_user_admin')
                     ->with([
                         'fullName' => $this->user->name ?? $this->user->profile->full_name,
