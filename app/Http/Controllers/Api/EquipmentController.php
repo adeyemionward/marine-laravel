@@ -449,7 +449,7 @@ class EquipmentController extends Controller
     /**
      * Display the specified equipment listing
      */
-    public function show(int $id)
+    public function show($id)
     {
         try {
             $listing = EquipmentListing::with(['seller.profile', 'seller.sellerProfile', 'category'])
